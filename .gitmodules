@@ -1,0 +1,3 @@
+[submodule "ipxe"]
+	path = ipxe
+	url = git@github.com:glevand/thunder-ci--ipxe.git
