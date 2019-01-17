@@ -1,0 +1,32 @@
+# /etc/systemd/system/tci-jenkins.service
+
+[Unit]
+Description=tci-jenkins
+After=docker.service
+Requires=docker.service
+
+[Service]
+RestartSec=60s
+Restart=always
+
+Environment=SYSTEMD_LOG_LEVEL=debug
+
+RuntimeDirectory=tci-store/%n
+#RuntimeDirectoryMode=0775
+
+ExecStartPre=-/bin/sh -c '/usr/bin/docker rm -f %n 2>/dev/null'
+
+ExecStart=/usr/bin/docker run --init --rm \
+	--name %n \
+	--network host \
+	--env "TCI_STORE=/run/tci-store/%n" \
+	-v /run/tci-store/%n:/run/tci-store/%n \
+	-v jenkins_home:/var/jenkins_home \
+	-v /var/run/docker.sock:/var/run/docker.sock \
+	tci-jenkins:1
+
+# FIXME: Need to make this return success on shutdown.
+ExecStop=/usr/bin/docker stop %n
+
+[Install]
+WantedBy=multi-user.target

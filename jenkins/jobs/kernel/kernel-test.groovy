@@ -11,7 +11,7 @@ script {
 def stagingTokenBootstrap = [:]
 boolean cacheFoundBootstrap = false
 boolean cacheFoundKernel = false
-boolean cacheFoundRootfs = false
+boolean cacheFoundImage = false
 
 pipeline {
     parameters {
@@ -52,7 +52,7 @@ pipeline {
                description: 'Target machine to run tests on.')
 
         choice(name: 'TEST_NAME',
-               choices: "sys-info\nhttp-wrk\nkselftest\nltp\nunixbench",
+               choices: "ltp\nunixbench\nkselftest\nhttp-wrk\nnone",
                description: 'Test to run on target machine.')
 
         string(name: 'PIPELINE_BRANCH',
@@ -68,7 +68,7 @@ pipeline {
             defaultValue: true,
             description: '[debugging] Use cached rootfs bootstrap image.')
 
-        booleanParam(name: 'USE_ROOTFS_CACHE',
+        booleanParam(name: 'USE_IMAGE_CACHE',
             defaultValue: false,
             description: '[debugging] Use cached rootfs disk image.')
 
@@ -86,14 +86,13 @@ pipeline {
     }
 
     environment {
-        String buildName = 'build'
-        String topBuildDir = "${env.buildName}"
+        String topBuildDir = 'build'
         String scriptsDir = 'scripts'
  
         String bootstrapPrefix="${env.topBuildDir}/${params.TARGET_ARCH}-${params.ROOTFS_TYPE}"
-        String bootstrapDir="${env.bootstrapPrefix}.bootstrap"
+        String outputPrefix="${env.bootstrapPrefix}-${params.TEST_NAME}"
 
-        String outputPrefix="${env.topBuildDir}/${params.TARGET_ARCH}-${params.ROOTFS_TYPE}-${params.TEST_NAME}"
+        String bootstrapDir="${env.bootstrapPrefix}.bootstrap"
         String imageDir="${env.outputPrefix}.image"
         String testsDir="${env.outputPrefix}.tests"
         String resultsDir="${env.outputPrefix}.results"
@@ -105,6 +104,9 @@ echo -n '${env.topBuildDir}/'; \
 echo '${params.KERNEL_GIT_URL}' | sed 's|://|-|; s|/|-|g'").trim()
         String kernelBuildDir = "${env.topBuildDir}/${params.TARGET_ARCH}-kernel-build"
         String kernelInstallDir = "${env.topBuildDir}/${params.TARGET_ARCH}-kernel-install"
+
+        //String qemu_out = "${env.topBuildDir}/qemu-console.txt"
+        //String remote_out = "${env.topBuildDir}/${params.TEST_MACHINE}-console.txt"
 
         String tciStorePath = sh(
             returnStdout: true,
@@ -139,8 +141,7 @@ fi")
                 tci_setup_jenkins_creds()
                 sh("mkdir -p ${env.resultsDir}")
                 //cache_test()
-                echo "${STAGE_NAME}: dockerTag        = @${env.dockerTag}@"
-                echo "${STAGE_NAME}: dockerCredsExtra = @${env.dockerCredsExtra}@"
+                echo "@${params.TEST_NAME}@"
             }
         }
 
@@ -148,8 +149,9 @@ fi")
             environment { /* build-builder */
                 resultFile = "${env.resultsDir}/${STAGE_NAME}-result.txt"
             }
-
             steps { /* build-builder */
+                echo "${STAGE_NAME}: dockerTag=@${env.dockerTag}@"
+
                 tci_print_debug_info("${STAGE_NAME}")
                 tci_print_result_header(env.resultFile)
 
@@ -168,9 +170,6 @@ fi
 """)
             }
             post { /* build-builder */
-                always {
-                    archiveArtifacts(artifacts: "${env.resultFile}")
-                }
                 cleanup {
                     echo "${STAGE_NAME}: cleanup: ${currentBuild.currentResult} -> ${currentBuild.result}"
                 }
@@ -189,7 +188,9 @@ fi
                     agent { /* build-kernel */
                         docker {
                             image "${env.dockerTag}"
-                            args "--network host ${env.dockerCredsExtra}"
+                            args "--network host \
+                                ${env.dockerCredsExtra} \
+                            "
                             reuseNode true
                         }
                     }
@@ -206,7 +207,7 @@ fi
                             ]
                             sh("git show -q")
                         }
-
+ 
                         script {
                             if (params.USE_KERNEL_CACHE) {
                                 cacheFoundKernel = newFileCache.get(
@@ -221,34 +222,42 @@ fi
                             sh("""#!/bin/bash -ex
 export PS4='+ [${STAGE_NAME}] \${BASH_SOURCE##*/}:\${LINENO}: '
 
-rm -rf ${env.kernelBuildDir} ${env.kernelInstallDir}
+src_dir="\$(pwd)/${env.kernelSrcDir}"
+build_dir="\$(pwd)/${env.kernelBuildDir}"
+install_dir="\$(pwd)/${env.kernelInstallDir}"
 
-${env.scriptsDir}/tci-run.sh \
-    --arch=${params.TARGET_ARCH} \
-    --build-name=${env.buildName} \
-    --linux-branch=${params.KERNEL_GIT_BRANCH} \
-    --linux-config=${params.KERNEL_CONFIG_URL} \
-    --linux-repo=${params.KERNEL_GIT_URL} \
-    --linux-src-dir=${env.kernelSrcDir} \
-    --test-machine=${params.TARGET_MACHINE} \
-    --rootfs-types=${params.ROOTFS_TYPE} \
-    --test-types=${params.TEST_NAME} \
-    --build-kernel
+rm -rf \${build_dir} "\${install_dir}"
 
-rm -rf ${env.kernelBuildDir}
+${env.scriptsDir}/build-linux-kernel.sh \
+    --build-dir=\${build_dir} \
+    --install-dir=\${install_dir} \
+    ${params.TARGET_ARCH} \${src_dir} defconfig
+
+if [[ -n "${params.KERNEL_CONFIG_URL}" ]]; then
+    curl --silent --show-error --location ${params.KERNEL_CONFIG_URL} \
+        > \${build_dir}/.config
+else
+    ${env.scriptsDir}/set-config-opts.sh \
+        --verbose \
+        ${env.scriptsDir}/tx2-fixup.spec \${build_dir}/.config
+fi
+
+${env.scriptsDir}/build-linux-kernel.sh \
+    --build-dir=\${build_dir} \
+    --install-dir=\${install_dir} \
+    ${params.TARGET_ARCH} \${src_dir} fresh
+
+cp -vf \${install_dir}/boot/config \${install_dir}/boot/kernel-config
+rm -rf \${build_dir}
 """)
                         }
                     }
 
                     post { /* build-kernel */
-                        always {
-                            sh("if [ -f ${env.kernelInstallDir}/boot/config ]; then \
-                                    cp -vf ${env.kernelInstallDir}/boot/config ${env.resultsDir}/kernel-config; \
-                                else \
-                                    echo 'NA' > ${env.resultsDir}/kernel-config; \
-                                fi")
+                        success {
                             archiveArtifacts(
-                                artifacts: "${env.resultFile}, ${env.resultsDir}/kernel-config")
+                                artifacts: "${env.resultFile}, ${env.kernelInstallDir}/boot/kernel-config",
+                                fingerprint: true)
                         }
                         cleanup {
                             echo "${STAGE_NAME}: cleanup: ${currentBuild.currentResult} -> ${currentBuild.result}"
@@ -256,23 +265,27 @@ rm -rf ${env.kernelBuildDir}
                     }
                 }
 
-                stage('build-bootstrap') {
-                    environment { /* build-bootstrap */
+                stage('bootstrap-disk-image') {
+                    environment { /* bootstrap-disk-image */
                         resultFile = "${env.resultsDir}/${STAGE_NAME}-result.txt"
                     }
 
-                    agent { /* build-bootstrap */
+                    agent { /* bootstrap-disk-image */
                         docker {
                             image "${env.dockerTag}"
-                            args "--network host --privileged \
-                                ${env.dockerCredsExtra}"
+                            args "--network host \
+                                --privileged \
+                                ${env.dockerCredsExtra} \
+                            "
                             reuseNode true
                         }
                     }
 
-                    steps { /* build-bootstrap */
+                    steps { /* bootstrap-disk-image */
                         tci_print_debug_info("${STAGE_NAME}")
                         tci_print_result_header(env.resultFile)
+
+                        echo "${STAGE_NAME}: params.USE_BOOTSTRAP_CACHE=${params.USE_BOOTSTRAP_CACHE}"
 
                         script {
                             if (params.USE_BOOTSTRAP_CACHE) {
@@ -284,6 +297,8 @@ rm -rf ${env.kernelBuildDir}
                                     return
                                 }
                             }
+
+                            echo "${STAGE_NAME}: dockerCredsExtra = @${env.dockerCredsExtra}@"
 
                             sh("""#!/bin/bash -ex
 export PS4='+ [${STAGE_NAME}] \${BASH_SOURCE##*/}:\${LINENO}: '
@@ -297,25 +312,17 @@ whoami
 #cat /etc/sudoers || :
 sudo -S true
 
-${env.scriptsDir}/tci-run.sh \
+${env.scriptsDir}/build-rootfs.sh \
     --arch=${params.TARGET_ARCH} \
-    --build-name=${env.buildName} \
-    --linux-branch=${params.KERNEL_GIT_BRANCH} \
-    --linux-config=${params.KERNEL_CONFIG_URL} \
-    --linux-repo=${params.KERNEL_GIT_URL} \
-    --linux-src-dir=${env.kernelSrcDir} \
-    --test-machine=${params.TARGET_MACHINE} \
-    --rootfs-types=${params.ROOTFS_TYPE} \
-    --test-types=${params.TEST_NAME} \
-    --build-bootstrap
+    --output-dir=${env.bootstrapDir} \
+    --rootfs-type=${params.ROOTFS_TYPE} \
+    --bootstrap \
+    --verbose
 """)
                         }
                     }
 
-                    post { /* build-bootstrap */
-                        always {
-                            archiveArtifacts(artifacts: "${env.resultFile}")
-                        }
+                    post { /* bootstrap-disk-image */
                         success {
                             script {
                                 if (params.USE_BOOTSTRAP_CACHE
@@ -325,6 +332,9 @@ ${env.scriptsDir}/tci-run.sh \
                                         env.bootstrapDir)
                                 }
                             }
+                            archiveArtifacts(
+                                artifacts: "${env.resultFile}",
+                                fingerprint: true)
                         }
                         cleanup {
                             echo "${STAGE_NAME}: cleanup: ${currentBuild.currentResult} -> ${currentBuild.result}"
@@ -377,30 +387,33 @@ ${env.scriptsDir}/tci-run.sh \
             }
         }
 
-        stage('build-rootfs') {
-            environment { /* build-rootfs */
+        stage('build-disk-image') {
+            environment { /* build-disk-image */
                 resultFile = "${env.resultsDir}/${STAGE_NAME}-result.txt"
             }
-            agent { /* build-rootfs */
+            agent { /* build-disk-image */
                 docker {
                     image "${env.dockerTag}"
-                    args "--network host --privileged ${env.dockerCredsExtra}"
+                            args "--network host \
+                                --privileged \
+                                ${env.dockerCredsExtra} \
+                            "
                     reuseNode true
                 }
             }
 
-            steps { /* build-rootfs */
+            steps { /* build-disk-image */
                 tci_print_debug_info("${STAGE_NAME}")
                 tci_print_result_header(env.resultFile)
                 script {
-                    if (params.USE_ROOTFS_CACHE) {
+                    if (params.USE_IMAGE_CACHE) {
                         if (newFileCache.get(env.fileCacheDir,
                             env.imageDir + '/initrd') == true
                             && newFileCache.get(env.fileCacheDir,
                             env.imageDir + '/manifest') == true
                             && newFileCache.get(env.fileCacheDir,
                             env.imageDir + '/login-key') == true) {
-                            cacheFoundRootfs = true
+                            cacheFoundImage = true
                             echo "${STAGE_NAME}: Using cached files."
                             currentBuild.result = 'SUCCESS'
                             return
@@ -410,28 +423,35 @@ ${env.scriptsDir}/tci-run.sh \
                     sh("""#!/bin/bash -ex
 export PS4='+ [${STAGE_NAME}] \${BASH_SOURCE##*/}:\${LINENO}: '
 
-${env.scriptsDir}/tci-run.sh \
+if [[ "${params.TEST_NAME}" != 'none' ]]; then
+    source ${env.scriptsDir}/test-plugin/${params.TEST_NAME}.sh
+    test_name="${params.TEST_NAME}"
+    extra_packages+="\$(test_packages_\${test_name//-/_} ${params.ROOTFS_TYPE})"
+fi
+
+modules_dir="\$(find ${env.kernelInstallDir}/lib/modules/* -maxdepth 0 -type d)"
+
+${env.scriptsDir}/build-rootfs.sh \
     --arch=${params.TARGET_ARCH} \
-    --build-name=${env.buildName} \
-    --linux-branch=${params.KERNEL_GIT_BRANCH} \
-    --linux-config=${params.KERNEL_CONFIG_URL} \
-    --linux-repo=${params.KERNEL_GIT_URL} \
-    --linux-src-dir=${env.kernelSrcDir} \
-    --test-machine=${params.TARGET_MACHINE} \
-    --rootfs-types=${params.ROOTFS_TYPE} \
-    --test-types=${params.TEST_NAME} \
-    --build-rootfs \
-    --build-tests
+    --output-dir=${env.imageDir} \
+    --rootfs-type=${params.ROOTFS_TYPE} \
+    --bootstrap-src=${env.bootstrapDir} \
+    --kernel-modules=\${modules_dir} \
+    --extra-packages="\${extra_packages}" \
+    --rootfs-setup \
+    --make-image \
+    --verbose
+
+    test_setup_\${test_name//-/_} ${params.ROOTFS_TYPE} ${env.imageDir}/rootfs
 """)
                 }
             }
 
-            post { /* build-rootfs */
-                always {
-                    archiveArtifacts(artifacts: "${env.resultFile}")
-                }
+            post { /* build-disk-image */
                 success {
-                    archiveArtifacts(artifacts: "${env.imageDir}/manifest")
+                    archiveArtifacts(
+                        artifacts: "${env.resultFile}, ${env.rootfs_prefix}.manifest",
+                        fingerprint: true)
                 }
                 failure {
                     clean_disk_image_build()
@@ -443,15 +463,15 @@ ${env.scriptsDir}/tci-run.sh \
             }
         }
 
-        stage('cache-rootfs') {
-            when { /* cache-rootfs */
-                expression { return params.USE_ROOTFS_CACHE }
+        stage('cache-image') {
+            when { /* cache-image */
+                expression { return params.USE_IMAGE_CACHE }
             }
-            steps { /* cache-rootfs */
+            steps { /* cache-image */
                 tci_print_debug_info("${STAGE_NAME}")
                 script {
-                    if (cacheFoundRootfs) {
-                        echo "${STAGE_NAME}: Rootfs already cached."
+                    if (cacheFoundImage) {
+                        echo "${STAGE_NAME}: Image already cached."
                     } else {
                         newFileCache.put(env.fileStagingDir, env.fileCacheDir,
                             env.imageDir + '/initrd', '**initrd stamp info**')
@@ -459,9 +479,51 @@ ${env.scriptsDir}/tci-run.sh \
                             env.imageDir + '/login-key', '**login-key stamp info**')
                         newFileCache.put(env.fileStagingDir, env.fileCacheDir,
                             env.imageDir + '/manifest', '**manifest stamp info**')
-                        newFileCache.put(env.fileStagingDir, env.fileCacheDir,
-                            env.testsDir, '**test stamp info**')
                     }
+                }
+            }
+        }
+
+        stage('build-test') {
+            when { /* build-test */
+                expression { return (params.TEST_NAME != 'none' && !params.USE_IMAGE_CACHE) }
+            }
+
+            environment { /* build-test */
+                resultFile = "${env.resultsDir}/${STAGE_NAME}-result.txt"
+            }
+
+            agent { /* build-test */
+                docker {
+                    image "${env.dockerTag}"
+                    args "--network host \
+                        ${env.dockerCredsExtra} \
+                    "
+                    reuseNode true
+                }
+            }
+
+            steps { /* build-test */
+                tci_print_debug_info("${STAGE_NAME}")
+                tci_print_result_header(env.resultFile)
+
+                sh("""#!/bin/bash -ex
+export PS4='+ [${STAGE_NAME}] \${BASH_SOURCE##*/}:\${LINENO}: '
+
+source ${env.scriptsDir}/test-plugin/${params.TEST_NAME}.sh
+
+test_name="${params.TEST_NAME}"
+test_build_\${test_name//-/_} ${env.testsDir} "${env.imageDir}/rootfs" ${env.kernelSrcDir}
+
+""")
+            }
+
+            post { /* run-test */
+                cleanup {
+                    echo "${STAGE_NAME}: cleanup: ${currentBuild.currentResult} -> ${currentBuild.result}"
+                    archiveArtifacts(
+                        artifacts: "${env.resultFile}",
+                        fingerprint: true)
                 }
             }
         }
@@ -480,7 +542,9 @@ ${env.scriptsDir}/tci-run.sh \
             agent { /* run-test */
                 docker {
                     image "${env.dockerTag}"
-                    args "--network host ${env.dockerCredsExtra}"
+                    args "--network host \
+                        ${env.dockerCredsExtra} \
+                    "
                     reuseNode true
                 }
             }
@@ -499,18 +563,17 @@ if [[ ${params.SYSTEMD_DEBUG} ]]; then
     extra_args="--systemd-debug"
 fi
 
-${env.scriptsDir}/tci-run.sh \
-    \${extra_args} \
+bash -x ${env.scriptsDir}/run-kernel-qemu-tests.sh \
+    --kernel=${env.kernelInstallDir}/boot/Image \
+    --initrd=${env.imageDir}/initrd \
+    --ssh-login-key=${env.imageDir}/login-key \
+    --test-name=${params.TEST_NAME} \
+    --tests-dir=${env.testsDir} \
+    --out-file=${env.outFile} \
+    --result-file=${env.resultFile} \
     --arch=${params.TARGET_ARCH} \
-    --build-name=${env.buildName} \
-    --linux-branch=${params.KERNEL_GIT_BRANCH} \
-    --linux-config=${params.KERNEL_CONFIG_URL} \
-    --linux-repo=${params.KERNEL_GIT_URL} \
-    --linux-src-dir=${env.kernelSrcDir} \
-    --test-machine=${params.TARGET_MACHINE} \
-    --rootfs-types=${params.ROOTFS_TYPE} \
-    --test-types=${params.TEST_NAME} \
-    --run-qemu-tests
+    \${extra_args} \
+    --verbose
 """)
                         break
                     default:
@@ -522,18 +585,17 @@ if [[ ${params.SYSTEMD_DEBUG} ]]; then
     extra_args="--systemd-debug"
 fi
 
-${env.scriptsDir}/tci-run.sh \
-    \${extra_args} \
-    --arch=${params.TARGET_ARCH} \
-    --build-name=${env.buildName} \
-    --linux-branch=${params.KERNEL_GIT_BRANCH} \
-    --linux-config=${params.KERNEL_CONFIG_URL} \
-    --linux-repo=${params.KERNEL_GIT_URL} \
-    --linux-src-dir=${env.kernelSrcDir} \
+bash -x ${env.scriptsDir}/run-kernel-remote-tests.sh \
+    --kernel=${env.kernelInstallDir}/boot/Image \
+    --initrd=${env.imageDir}/initrd \
+    --ssh-login-key=${env.imageDir}/login-key \
+    --test-name=${params.TEST_NAME} \
+    --tests-dir=${env.testsDir} \
+    --out-file=${env.outFile} \
+    --result-file=${env.resultFile} \
     --test-machine=${params.TARGET_MACHINE} \
-    --rootfs-types=${params.ROOTFS_TYPE} \
-    --test-types=${params.TEST_NAME} \
-    --run-remote-tests
+    \${extra_args} \
+    --verbose
 """)
                         }
                         break
@@ -542,12 +604,6 @@ ${env.scriptsDir}/tci-run.sh \
              }
 
             post { /* run-test */
-                always {
-                    sh("if [ ! -f ${env.outFile} ]; then \
-                            echo 'NA' > ${env.outFile}; \
-                        fi")
-                    archiveArtifacts(artifacts: "${env.resultFile}, ${env.outFile}")
-                }
                 success {
                     script {
                             if (readFile("${env.outFile}").contains('reboot: Power down')) {
@@ -560,10 +616,13 @@ ${env.scriptsDir}/tci-run.sh \
                 }
                 cleanup {
                     echo "${STAGE_NAME}: cleanup: ${currentBuild.currentResult} -> ${currentBuild.result}"
+                    archiveArtifacts(
+                        artifacts: "${env.resultFile}, ${env.outFile}",
+                        fingerprint: true)
                 }
             }
-
         }
+
     }
 }
 
