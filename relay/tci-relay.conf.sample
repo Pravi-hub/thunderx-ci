@@ -1,0 +1,11 @@
+# /etc/tci-relay.conf
+
+[limits]
+put=3
+get=3
+checkout=3
+
+[resources]
+t88=1800	# 30 minutes.
+sabre=1800	# 30 minutes.
+zabla=1800	# 30 minutes.
