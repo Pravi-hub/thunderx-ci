@@ -13,13 +13,14 @@ usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
 
-	echo "${name} - Builds TCI container image, Linux kernel, root file system image, and runs QEMU." >&2
+	echo "${name} - Builds TCI container image, Linux kernel, root file system images, runs test suites." >&2
 	echo "Usage: ${name} [flags]" >&2
 	echo "Option flags:" >&2
 	echo "  --arch            - Target architecture. Default: ${target_arch}." >&2
 	echo "  -h --help         - Show this help and exit." >&2
 	echo "  --build-name      - Build name. Default: '${build_name}'." >&2
 	echo "  --linux-branch    - Linux kernel git repository branch. Default: ${kernel_branch}." >&2
+	echo "  --linux-config    - URL of an alternate kernel config. Default: ${kernel_config}." >&2
 	echo "  --linux-repo      - Linux kernel git repository URL. Default: ${kernel_repo}." >&2
 	echo "  --linux-src-dir   - Linux kernel git working tree. Default: ${kernel_src_dir}." >&2
 	echo "  --test-machine    - Test machine name. Default: '${test_machine}'." >&2
@@ -45,8 +46,8 @@ usage() {
 process_opts() {
 	local short_opts="h123456"
 	local long_opts="\
-arch:,help,build-name:,linux-branch:,linux-repo:,linux-src-dir:,test-machine:,\
-systemd-debug,rootfs-types:,test-types:,\
+arch:,help,build-name:,linux-branch:,linux-config:,linux-repo:,linux-src-dir:,\
+test-machine:,systemd-debug,rootfs-types:,test-types:,\
 enter,build-kernel,build-bootstrap,build-rootfs,build-tests,run-qemu-tests,\
 run-remote-tests"
 
@@ -72,6 +73,10 @@ run-remote-tests"
 			;;
 		--linux-branch)
 			kernel_branch="${2}"
+			shift 2
+			;;
+		--linux-config)
+			kernel_config="${2}"
 			shift 2
 			;;
 		--linux-repo)
@@ -221,9 +226,10 @@ check_test_types() {
 build_kernel() {
 	local repo=${1}
 	local branch=${2}
-	local src_dir=${3}
-	local build_dir=${4}
-	local install_dir=${5}
+	local config=${3}
+	local src_dir=${4}
+	local build_dir=${5}
+	local install_dir=${6}
 
 	rm -rf ${build_dir} ${install_dir}
 
@@ -232,16 +238,20 @@ build_kernel() {
 	fi
 
 	(cd ${src_dir} && git remote update &&
-		git checkout --force ${branch})
+		git checkout --force ${branch} && git pull)
 
 	${SCRIPTS_TOP}/build-linux-kernel.sh \
 		--build-dir=${build_dir} \
 		--install-dir=${install_dir} \
 		${target_arch} ${src_dir} defconfig
 
-	${SCRIPTS_TOP}/set-config-opts.sh \
-		--verbose \
-		${SCRIPTS_TOP}/tx2-fixup.spec ${build_dir}/.config
+	if [[ ${config} != 'defconfig' ]]; then
+		curl --silent --show-error --location ${config} \
+			> ${build_dir}/.config
+	else
+		${SCRIPTS_TOP}/set-config-opts.sh --verbose \
+			${SCRIPTS_TOP}/tx2-fixup.spec ${build_dir}/.config
+	fi
 
 	${SCRIPTS_TOP}/build-linux-kernel.sh \
 		--build-dir=${build_dir} \
@@ -411,6 +421,7 @@ top_build_dir="$(pwd)/${build_name}"
 
 kernel_repo=${kernel_repo:-"https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"}
 kernel_branch=${kernel_branch:-"linux-5.0.y"}
+kernel_config=${kernel_config:-"defconfig"}
 kernel_repo_name="$(basename ${kernel_repo})"
 kernel_repo_name="${kernel_repo_name%.*}"
 kernel_src_dir=${kernel_src_dir:-"$(pwd)/${kernel_repo_name}"}
@@ -440,7 +451,7 @@ else
 	if [[ ${step_enter} ]]; then
 		docker_cmd="/bin/bash"
 	else
-		docker_cmd="/tci/scripts/run-all.sh ${parent_ops}"
+		docker_cmd="/tci/scripts/tci-run.sh ${parent_ops}"
 	fi
 
 	${SCRIPTS_TOP}/run-builder.sh \
@@ -486,8 +497,8 @@ mkdir -p ${top_build_dir}
 if [[ ${step_build_kernel} ]]; then
 	trap "on_exit 'build_kernel failed.'" EXIT
 
-	build_kernel ${kernel_repo} ${kernel_branch} ${kernel_src_dir} \
-		${kernel_build_dir} ${kernel_install_dir}
+	build_kernel ${kernel_repo} ${kernel_branch} ${kernel_config} \
+		${kernel_src_dir} ${kernel_build_dir} ${kernel_install_dir}
 fi
 
 for rootfs_type in ${rootfs_types}; do
@@ -497,9 +508,6 @@ for rootfs_type in ${rootfs_types}; do
 
 	if [[ ${step_build_bootstrap} ]]; then
 		trap "on_exit 'build_bootstrap failed.'" EXIT
-
-		${sudo} rm -rf ${bootstrap_prefix}*
-
 		build_bootstrap ${rootfs_type} ${bootstrap_dir}
 	fi
 

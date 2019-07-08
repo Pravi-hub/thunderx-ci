@@ -18,6 +18,7 @@ RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.
 		bash-completion \
 		binfmt-support \
 		ccache \
+		curl \
 		debootstrap \
 		dnsutils \
 		dosfstools \

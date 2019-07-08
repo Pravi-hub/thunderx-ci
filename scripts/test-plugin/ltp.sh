@@ -1,6 +1,6 @@
 # LTP test plug-in.
 
-SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "$(dirname "${BASH_SOURCE[0]}/..")" && pwd)"}
+SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
 source ${SCRIPTS_TOP}/lib/chroot.sh
