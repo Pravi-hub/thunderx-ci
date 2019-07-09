@@ -243,7 +243,7 @@ rm -rf ${env.kernelBuildDir}
 
                     post { /* build-kernel */
                         always {
-                            sh("if [[ ! -f ${env.resultsDir}/kernel-config ]]; then \
+                            sh("if [ ! -f ${env.resultsDir}/kernel-config ]; then \
                                     echo 'NA' > ${env.resultsDir}/kernel-config; \
                                 fi")
                             archiveArtifacts(
@@ -542,7 +542,7 @@ ${env.scriptsDir}/tci-run.sh \
 
             post { /* run-test */
                 always {
-                    sh("if [[ ! -f ${env.outFile} ]]; then \
+                    sh("if [ ! -f ${env.outFile} ]; then \
                             echo 'NA' > ${env.outFile}; \
                         fi")
                     archiveArtifacts(artifacts: "${env.resultFile}, ${env.outFile}")
