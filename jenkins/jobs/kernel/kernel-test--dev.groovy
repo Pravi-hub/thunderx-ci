@@ -106,9 +106,6 @@ echo '${params.KERNEL_GIT_URL}' | sed 's|://|-|; s|/|-|g'").trim()
         String kernelBuildDir = "${env.topBuildDir}/${params.TARGET_ARCH}-kernel-build"
         String kernelInstallDir = "${env.topBuildDir}/${params.TARGET_ARCH}-kernel-install"
 
-        //String qemu_out = "${env.topBuildDir}/qemu-console.txt"
-        //String remote_out = "${env.topBuildDir}/${params.TEST_MACHINE}-console.txt"
-
         String tciStorePath = sh(
             returnStdout: true,
             script: "set -x; \
@@ -142,7 +139,8 @@ fi")
                 tci_setup_jenkins_creds()
                 sh("mkdir -p ${env.resultsDir}")
                 //cache_test()
-                echo "@${params.TEST_NAME}@"
+                echo "${STAGE_NAME}: dockerTag        = @${env.dockerTag}@"
+                echo "${STAGE_NAME}: dockerCredsExtra = @${env.dockerCredsExtra}@"
             }
         }
 
@@ -150,9 +148,8 @@ fi")
             environment { /* build-builder */
                 resultFile = "${env.resultsDir}/${STAGE_NAME}-result.txt"
             }
-            steps { /* build-builder */
-                echo "${STAGE_NAME}: dockerTag=@${env.dockerTag}@"
 
+            steps { /* build-builder */
                 tci_print_debug_info("${STAGE_NAME}")
                 tci_print_result_header(env.resultFile)
 
@@ -192,9 +189,7 @@ fi
                     agent { /* build-kernel */
                         docker {
                             image "${env.dockerTag}"
-                            args "--network host \
-                                ${env.dockerCredsExtra} \
-                            "
+                            args "--network host ${env.dockerCredsExtra}"
                             reuseNode true
                         }
                     }
@@ -268,10 +263,8 @@ rm -rf ${env.kernelBuildDir}
                     agent { /* build-bootstrap */
                         docker {
                             image "${env.dockerTag}"
-                            args "--network host \
-                                --privileged \
-                                ${env.dockerCredsExtra} \
-                            "
+                            args "--network host --privileged \
+                                ${env.dockerCredsExtra}"
                             reuseNode true
                         }
                     }
@@ -279,8 +272,6 @@ rm -rf ${env.kernelBuildDir}
                     steps { /* build-bootstrap */
                         tci_print_debug_info("${STAGE_NAME}")
                         tci_print_result_header(env.resultFile)
-
-                        echo "${STAGE_NAME}: params.USE_BOOTSTRAP_CACHE=${params.USE_BOOTSTRAP_CACHE}"
 
                         script {
                             if (params.USE_BOOTSTRAP_CACHE) {
@@ -292,8 +283,6 @@ rm -rf ${env.kernelBuildDir}
                                     return
                                 }
                             }
-
-                            echo "${STAGE_NAME}: dockerCredsExtra = @${env.dockerCredsExtra}@"
 
                             sh("""#!/bin/bash -ex
 export PS4='+ [${STAGE_NAME}] \${BASH_SOURCE##*/}:\${LINENO}: '
@@ -394,10 +383,7 @@ ${env.scriptsDir}/tci-run.sh \
             agent { /* build-rootfs */
                 docker {
                     image "${env.dockerTag}"
-                            args "--network host \
-                                --privileged \
-                                ${env.dockerCredsExtra} \
-                            "
+                    args "--network host --privileged ${env.dockerCredsExtra}"
                     reuseNode true
                 }
             }
@@ -493,9 +479,7 @@ ${env.scriptsDir}/tci-run.sh \
             agent { /* run-test */
                 docker {
                     image "${env.dockerTag}"
-                    args "--network host \
-                        ${env.dockerCredsExtra} \
-                    "
+                    args "--network host ${env.dockerCredsExtra}"
                     reuseNode true
                 }
             }
