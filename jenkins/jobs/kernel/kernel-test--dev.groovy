@@ -236,7 +236,6 @@ ${env.scriptsDir}/tci-run.sh \
     --test-types=${params.TEST_NAME} \
     --build-kernel
 
-cp -vf ${env.kernelInstallDir}/boot/config ${env.resultsDir}/kernel-config
 rm -rf ${env.kernelBuildDir}
 """)
                         }
