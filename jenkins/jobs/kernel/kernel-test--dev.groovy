@@ -214,7 +214,6 @@ fi
                                 if (cacheFoundKernel) {
                                     currentBuild.result = 'SUCCESS'
                                     echo "${STAGE_NAME}: Using cached files."
-                                    cp -vf ${env.kernelInstallDir}/boot/config ${env.resultsDir}/kernel-config
                                     return
                                 }
                             }
