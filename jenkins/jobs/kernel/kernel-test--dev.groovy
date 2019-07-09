@@ -214,6 +214,7 @@ fi
                                 if (cacheFoundKernel) {
                                     currentBuild.result = 'SUCCESS'
                                     echo "${STAGE_NAME}: Using cached files."
+                                    cp -vf ${env.kernelInstallDir}/boot/config ${env.resultsDir}/kernel-config
                                     return
                                 }
                             }
@@ -243,11 +244,13 @@ rm -rf ${env.kernelBuildDir}
 
                     post { /* build-kernel */
                         always {
-                            sh("if [ ! -f ${env.resultsDir}/kernel-config ]; then \
+                            sh("if [ -f ${env.kernelInstallDir}/boot/config ]; then \
+                                    cp -vf ${env.kernelInstallDir}/boot/config ${env.resultsDir}/kernel-config; \
+                                else \
                                     echo 'NA' > ${env.resultsDir}/kernel-config; \
                                 fi")
                             archiveArtifacts(
-                                artifacts: "${env.resultFile}, ${env.kernelInstallDir}/boot/kernel-config")
+                                artifacts: "${env.resultFile}, ${env.resultsDir}/kernel-config")
                         }
                         cleanup {
                             echo "${STAGE_NAME}: cleanup: ${currentBuild.currentResult} -> ${currentBuild.result}"
