@@ -439,7 +439,7 @@ host_arch=$(get_arch "$(uname -m)")
 top_build_dir="$(pwd)/${build_name}"
 
 kernel_repo=${kernel_repo:-"https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"}
-kernel_branch=${kernel_branch:-"linux-5.0.y"}
+kernel_branch=${kernel_branch:-"linux-5.1.y"}
 kernel_config=${kernel_config:-"defconfig"}
 kernel_repo_name="$(basename ${kernel_repo})"
 kernel_repo_name="${kernel_repo_name%.*}"
