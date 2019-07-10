@@ -7,7 +7,7 @@ source ${SCRIPTS_TOP}/lib/util.sh
 test_usage_http_wrk() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
-	echo "${BASH_SOURCE##*/} - wrk - a HTTP benchmarking tool." >&2
+	echo "  ${BASH_SOURCE##*/} - wrk - a HTTP benchmarking tool." >&2
 	echo "    wrk is a modern HTTP benchmarking tool capable of generating significant"
 	echo "    load when run on a single multi-core CPU. It combines a multithreaded"
 	echo "    design with scalable event notification systems such as epoll and kqueue."

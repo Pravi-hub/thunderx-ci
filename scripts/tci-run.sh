@@ -51,6 +51,7 @@ usage() {
 test_usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
+	echo "Test Plugin Info:" >&2
 	for test in ${known_test_types}; do
 		test_usage_${test/-/_}
 		echo "" >&2
@@ -448,7 +449,9 @@ kernel_build_dir="${top_build_dir}/${target_arch}-kernel-build"
 kernel_install_dir="${top_build_dir}/${target_arch}-kernel-install"
 
 if [[ ${help_all} ]]; then
+	set +o xtrace
 	usage
+	echo "" >&2
 	test_usage
 	trap - EXIT
 	exit 0

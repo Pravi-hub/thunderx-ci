@@ -7,7 +7,7 @@ source ${SCRIPTS_TOP}/lib/util.sh
 test_usage_sys_info() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
-	echo "${BASH_SOURCE##*/} - Collect system information." >&2
+	echo "  ${BASH_SOURCE##*/} - Collect system information." >&2
 	eval "${old_xtrace}"
 }
 

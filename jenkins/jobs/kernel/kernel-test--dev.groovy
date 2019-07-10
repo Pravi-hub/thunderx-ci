@@ -52,7 +52,7 @@ pipeline {
                description: 'Target machine to run tests on.')
 
         choice(name: 'TEST_NAME',
-               choices: "ltp\nunixbench\nkselftest\nhttp-wrk",
+               choices: "sys-info\nhttp-wrk\nkselftest\nltp\nunixbench",
                description: 'Test to run on target machine.')
 
         string(name: 'PIPELINE_BRANCH',
