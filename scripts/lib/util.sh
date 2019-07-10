@@ -193,10 +193,11 @@ known_rootfs_types="
 "
 
 known_test_types="
-	ltp
-	unixbench
-	kselftest
 	http-wrk
+	kselftest
+	ltp
+	sys-info
+	unixbench
 "
 
 MODULES_ID=${MODULES_ID:-"kernel_modules"}
