@@ -253,11 +253,13 @@ trap "on_exit 'failed.'" EXIT
 
 process_opts "${@}"
 
+test_machine='qemu'
+
 host_arch=$(get_arch "$(uname -m)")
 target_arch=${target_arch:-"${host_arch}"}
 hostfwd_offset=${hostfwd_offset:-"20000"}
-out_file=${out_file:-"qemu.out"}
-result_file=${result_file:-"qemu-result.txt"}
+out_file=${out_file:-"${test_machine}.out"}
+result_file=${result_file:-"${test_machine}-result.txt"}
 
 relay_triple=$(relay_init_triple ${relay_server})
 relay_token=$(relay_triple_to_token ${relay_triple})
@@ -358,7 +360,7 @@ ssh_no_check="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 source ${SCRIPTS_TOP}/test-plugin/${test_name}.sh
 run_ssh_opts="${ssh_no_check} -i ${ssh_login_key} ${remote_ssh_opts}"
-test_run_${test_name/-/_} ${tests_dir} 'qemu' ${remote_host} run_ssh_opts
+test_run_${test_name/-/_} ${tests_dir} ${test_machine} ${remote_host} run_ssh_opts
 
 ssh ${ssh_no_check} -i ${ssh_login_key} ${remote_ssh_opts} ${remote_host} \
 	'/sbin/poweroff &'

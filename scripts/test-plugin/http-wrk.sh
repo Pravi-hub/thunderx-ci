@@ -93,6 +93,7 @@ test_run_http_wrk() {
 	local machine_type=${2}
 	local ssh_host=${3}
 	local -n _test_run_http_wrk__ssh_opts=${4}
+	local ssh_opts="${_test_run_sys_info__ssh_opts}"
 
 	local test_name='http-wrk'
 	local archive_file="${tests_dir}/${test_name}.tar.gz"

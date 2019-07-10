@@ -303,7 +303,7 @@ ssh_no_check="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 source ${SCRIPTS_TOP}/test-plugin/${test_name}.sh
 run_ssh_opts="${ssh_no_check} -i ${ssh_login_key} ${remote_ssh_opts}"
-test_run_${test_name/-/_} ${tests_dir} 'qemu' ${remote_host} run_ssh_opts
+test_run_${test_name/-/_} ${tests_dir} ${test_machine} ${remote_host} run_ssh_opts
 
 ssh ${ssh_no_check} -i ${ssh_login_key} ${remote_ssh_opts} ${remote_host} \
 	'/sbin/poweroff &'
