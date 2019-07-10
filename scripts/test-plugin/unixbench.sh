@@ -4,6 +4,21 @@ SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
 
+test_usage_unixbench() {
+	local old_xtrace="$(shopt -po xtrace || :)"
+	set +o xtrace
+	echo "${BASH_SOURCE##*/} - UnixBench - The original BYTE UNIX benchmark suite." >&2
+	echo "    The purpose of UnixBench is to provide a basic indicator of the performance"
+	echo "    of a Unix-like system; hence, multiple tests are used to test various"
+	echo "    aspects of the system's performance. These test results are then compared"
+	echo "    to the scores from a baseline system to produce an index value, which is"
+	echo "    generally easier to handle than the raw scores. The entire set of index"
+	echo "    values is then combined to make an overall index for the system."
+	echo "  More Info:" >&2
+	echo "    https://github.com/kdlucas/byte-unixbench/blob/master/README.md" >&2
+	eval "${old_xtrace}"
+}
+
 test_packages_unixbench() {
 	local rootfs_type=${1}
 

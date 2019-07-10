@@ -9,14 +9,19 @@ DOCKER_TOP=${DOCKER_TOP:-"$(cd "${SCRIPTS_TOP}/../docker" && pwd)"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
 
+for test in ${known_test_types}; do
+	check_file ${SCRIPTS_TOP}/test-plugin/${test}.sh
+	source ${SCRIPTS_TOP}/test-plugin/${test}.sh
+done
+
 usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
-
 	echo "${name} - Builds TCI container image, Linux kernel, root file system images, runs test suites." >&2
 	echo "Usage: ${name} [flags]" >&2
 	echo "Option flags:" >&2
 	echo "  --arch            - Target architecture. Default: ${target_arch}." >&2
+	echo "  -a --help-all     - Show test help and exit." >&2
 	echo "  -h --help         - Show this help and exit." >&2
 	echo "  --build-name      - Build name. Default: '${build_name}'." >&2
 	echo "  --linux-branch    - Linux kernel git repository branch. Default: ${kernel_branch}." >&2
@@ -43,10 +48,20 @@ usage() {
 	eval "${old_xtrace}"
 }
 
+test_usage() {
+	local old_xtrace="$(shopt -po xtrace || :)"
+	set +o xtrace
+	for test in ${known_test_types}; do
+		test_usage_${test/-/_}
+		echo "" >&2
+	done
+	eval "${old_xtrace}"
+}
+
 process_opts() {
-	local short_opts="h123456"
+	local short_opts="ah123456"
 	local long_opts="\
-arch:,help,build-name:,linux-branch:,linux-config:,linux-repo:,linux-src-dir:,\
+arch:,help-all,help,build-name:,linux-branch:,linux-config:,linux-repo:,linux-src-dir:,\
 test-machine:,systemd-debug,rootfs-types:,test-types:,\
 enter,build-kernel,build-bootstrap,build-rootfs,build-tests,run-qemu-tests,\
 run-remote-tests"
@@ -62,6 +77,10 @@ run-remote-tests"
 		--arch)
 			target_arch=$(get_arch "${2}")
 			shift 2
+			;;
+		-a | --help-all)
+			help_all=1
+			shift
 			;;
 		-h | --help)
 			usage=1
@@ -428,8 +447,14 @@ kernel_src_dir=${kernel_src_dir:-"$(pwd)/${kernel_repo_name}"}
 kernel_build_dir="${top_build_dir}/${target_arch}-kernel-build"
 kernel_install_dir="${top_build_dir}/${target_arch}-kernel-install"
 
+if [[ ${help_all} ]]; then
+	usage
+	test_usage
+	trap - EXIT
+	exit 0
+fi
 
-if [[ -n "${usage}" ]]; then
+if [[ ${usage} ]]; then
 	usage
 	trap - EXIT
 	exit 0
@@ -520,9 +545,6 @@ for rootfs_type in ${rootfs_types}; do
 		results_dir=${output_prefix}.results
 	
 		echo "${name}: INFO: ${test_name} => ${output_prefix}" >&2
-
-		check_file ${SCRIPTS_TOP}/test-plugin/${test_name}.sh
-		source ${SCRIPTS_TOP}/test-plugin/${test_name}.sh
 
 		if [[ ${step_build_rootfs} ]]; then
 			trap "on_exit 'build_rootfs failed.'" EXIT

@@ -4,6 +4,20 @@ SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
 
+test_usage_kselftest() {
+	local old_xtrace="$(shopt -po xtrace || :)"
+	set +o xtrace
+	echo "${BASH_SOURCE##*/} - Linux Kernel Selftests." >&2
+	echo "    The kernel contains a set of 'self tests' under the"
+	echo "    tools/testing/selftests/ directory. These are intended to be small"
+	echo "    tests to exercise individual code paths in the kernel. Tests are"
+	echo "    intended to be run after building, installing and booting a kernel."
+	echo "  More Info:" >&2
+	echo "    https://www.kernel.org/doc/html/v4.16/dev-tools/kselftest.html" >&2
+	echo "    https://www.kernel.org/doc/Documentation/kselftest.txt" >&2
+	eval "${old_xtrace}"
+}
+
 test_packages_kselftest() {
 	local rootfs_type=${1}
 
