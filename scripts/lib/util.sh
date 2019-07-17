@@ -197,6 +197,7 @@ known_test_types="
 	unixbench
 	kselftest
 	http-wrk
+	lmbench
 "
 
 MODULES_ID=${MODULES_ID:-"kernel_modules"}
