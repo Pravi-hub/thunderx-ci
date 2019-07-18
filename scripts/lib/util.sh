@@ -198,6 +198,7 @@ known_test_types="
 	ltp
 	sys-info
 	unixbench
+	lmbench
 "
 
 MODULES_ID=${MODULES_ID:-"kernel_modules"}
