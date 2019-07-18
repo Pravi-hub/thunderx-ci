@@ -71,6 +71,8 @@ test_build_lmbench() {
 			;;
 		esac
 	fi
+	
+	git apply ${SCRIPTS_TOP}/test-plugin/lmbench/fix_aarh64.patch
 
 	export SYSROOT="$(pwd)/${sysroot}"
 	export CPPFLAGS="-I${SYSROOT}/usr/include -I${SYSROOT}/include -I${SYSROOT}"
