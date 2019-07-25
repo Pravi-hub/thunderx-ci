@@ -37,7 +37,7 @@ test_build_lmbench() {
 	local kernel_src_dir="$(cd ${4} && pwd)"
 	
 	local test_name='lmbench'
-	local src_repo=${lmbench_src_repo:-"https://github.com/Pravi-hub/lmbench.git"}
+	local src_repo=${lmbench_src_repo:-"https://github.com/intel/lmbench.git"}
 	local repo_branch=${lmbench_repo_branch:-"master"}
 	local src_dir="${tests_dir}/${test_name}-src"
 	local build_dir="${tests_dir}/${test_name}-build"
