@@ -19,6 +19,7 @@ RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.
 		binfmt-support \
 		ccache \
 		curl \
+		clang \
 		debootstrap \
 		dnsutils \
 		dosfstools \
@@ -28,6 +29,7 @@ RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.
 		ipmitool \
 		isc-dhcp-server \
 		libncurses5-dev \
+		llvm \
 		netcat-openbsd \
 		net-tools \
 		ovmf \
@@ -42,6 +44,7 @@ RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.
 		wget \
 	&& apt-get -y build-dep linux \
 	&& DEBIAN_FRONTEND=noninteractive apt-get -y install \
+		g++-aarch64-linux-gnu \
 		gcc-aarch64-linux-gnu \
 		qemu-efi-aarch64 \
 		qemu-system-aarch64 \
