@@ -23,16 +23,20 @@ test_packages_kselftest() {
 
 	case "${rootfs_type}" in
 	alpine)
-		echo ''
+		echo "fuse-dev \
+			libcap-dev \
+			libcap-ng-dev \
+			libaio-dev \
+			"
 		;;
 	debian)
-		echo 'libaio-dev \
+		echo "libaio-dev \
 			libcap-dev \
 			libcap-ng-dev \
 			libfuse-dev \
 			linux-libc-dev-arm64-cross \
 			libnuma-dev \
-		'
+		"
 		;;
 	*)
 		echo "${FUNCNAME[0]}: ERROR: Unknown rootfs type: '${rootfs_type}'" >&2

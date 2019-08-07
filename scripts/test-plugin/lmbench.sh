@@ -13,6 +13,7 @@ test_packages_lmbench() {
 	
 	case "${rootfs_type}" in
 	alpine)
+		echo "make"
 		;;
 	debian)
 		echo "make"
