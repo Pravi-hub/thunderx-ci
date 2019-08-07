@@ -1,4 +1,4 @@
-# LmBench test plug-ini.
+# LmBench test plug-in.
 
 SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}
 
@@ -80,6 +80,7 @@ test_build_lmbench() {
 	export LDFLAGS="-L${SYSROOT}/usr/lib -L${SYSROOT}/lib"
 
 	make ${make_opts}
+	mv bin/x86_64-linux-gnu/ bin/aarch64-linux-gnu
 	tar -C ${build_dir}/../ -czf ${archive_file} lmbench-build
 
 	popd
@@ -120,11 +121,6 @@ rootfs_type=${rootfs_type#ID=}
 mkdir -p lmbench-test
 tar -C lmbench-test -xf lmbench.tar.gz
 cd ./lmbench-test/lmbench-build
-
-#due to cross compailation
-cd  bin/
-mv x86_64-linux-gnu/ ./aarch64-linux-gnu
-cd ..
 
 set +e
 

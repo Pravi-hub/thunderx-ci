@@ -195,10 +195,10 @@ known_rootfs_types="
 known_test_types="
 	http-wrk
 	kselftest
+	lmbench
 	ltp
 	sys-info
 	unixbench
-	lmbench
 "
 
 MODULES_ID=${MODULES_ID:-"kernel_modules"}
