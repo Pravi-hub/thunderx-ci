@@ -182,6 +182,7 @@ EOF
 alpine_os_mirror="http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/"
 
 default_packages=${alpine_default_packages:-"
+	libc6-compat
 	net-tools
 	netcat-openbsd
 	pciutils
