@@ -14,7 +14,7 @@ test_packages_lmbench() {
 	
 	case "${rootfs_type}" in
 	alpine)
-		echo "make"
+		echo "make libc6-compat"
 		;;
 	debian)
 		echo "make"
