@@ -19,6 +19,7 @@ test_usage_ltp() {
 
 test_packages_ltp() {
 	local rootfs_type=${1}
+	local target_arch=${2}
 
 	case "${rootfs_type}" in
 	alpine)
@@ -73,7 +74,7 @@ test_build_ltp() {
 	check_directory "${sysroot}"
 	rm -rf ${build_dir} ${archive_file} ${results_file}
 
-	git_checkout ${src_dir} ${src_repo} ${repo_branch}
+	git_checkout_safe ${src_dir} ${src_repo} ${repo_branch}
 
 	mkdir -p ${build_dir}
 	rsync -av --delete --exclude='.git' ${src_dir}/ ${build_dir}/
@@ -81,17 +82,7 @@ test_build_ltp() {
 	pushd ${build_dir}
 
 	if [[ "${host_arch}" != "${target_arch}" ]]; then
-		case "${target_arch}" in
-		amd64)
-			# FIXME:
-			echo "${FUNCNAME[0]}: ERROR: No amd64 support yet." >&2
-			configure_opts='--host=x86_64-linux-gnu ???'
-			exit 1
-			;;
-		arm64)
-			configure_opts='--host=aarch64-linux-gnu'
-			;;
-		esac
+		make_opts="CC=$(get_triple ${target_arch})-gcc"
 	fi
 
 	export SYSROOT="${sysroot}"

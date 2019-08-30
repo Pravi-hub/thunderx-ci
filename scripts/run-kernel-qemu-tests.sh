@@ -269,10 +269,15 @@ if [[ -n "${usage}" ]]; then
 	exit 0
 fi
 
-if [[ "${target_arch}" != "arm64" ]]; then
-	echo "${name}: ERROR: Unsupported target arch '${target_arch}'.  Must be arm64." >&2
+case ${target_arch} in
+arm64|ppc32|ppc64)
+	;;
+*)
+	echo "${name}: ERROR: Unsupported target arch '${target_arch}'." >&2
 	exit 1
-fi
+	;;
+esac
+
 
 check_opt 'kernel' ${kernel}
 check_file "${kernel}"

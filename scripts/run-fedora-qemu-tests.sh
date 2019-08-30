@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
-
-name="${0##*/}"
-
-SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
-
-source ${SCRIPTS_TOP}/lib/util.sh
-source ${SCRIPTS_TOP}/lib/relay.sh
-
 usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
@@ -198,40 +189,21 @@ start_qemu_user_networking() {
 		</dev/null &> "${out_file}.start" &
 }
 
-..put in seperate file
-download_fedora_installer() {
-	local ver=${1}
-	local dir=${2}
-	local f_initrd
-	local f_kernel
-
-	case "${ver}" in
-	f30)
-		local f30_dl="https://download.fedoraproject.org/pub/fedora/linux/releases/30/Server/aarch64"
-		f_initrd="${f30_dl}/os/images/pxeboot/initrd.img"
-		f_kernel="${f30_dl}/os/images/pxeboot/vmlinuz"
-		;
-	*)
-		echo "${name}: ERROR: Unknown fedora version: '${ver}'" >&2
-		exit 1
-		;;
-	esac
-	
-	mkdir -p ${dir}
-	curl --silent --show-error --location ${f30_initrd} > ${dir}/f_initrd
-	curl --silent --show-error --location ${f30_kernel} > ${dir}/f_kernel
-
-}
-
 #===============================================================================
 # program start
 #===============================================================================
+name="${0##*/}"
+SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
 
 trap "on_exit 'failed.'" EXIT
-
-process_opts "${@}"
+set -e
 
 host_arch=$(get_arch "$(uname -m)")
+
+source ${SCRIPTS_TOP}/lib/util.sh
+source ${SCRIPTS_TOP}/lib/relay.sh
+
+process_opts "${@}"
 
 target_arch=${target_arch:-"${host_arch}"}
 hostfwd_offset=${hostfwd_offset:-"20000"}
@@ -242,7 +214,7 @@ if [[ -n "${usage}" ]]; then
 fi
 
 if [[ "${target_arch}" != "arm64" ]]; then
-	echo "${name}: ERROR: Unsupported target arch '${target_arch}'.  Must be arm64." >&2
+	echo "${name}: ERROR: Unsupported target arch '${target_arch}'." >&2
 	exit 1
 fi
 

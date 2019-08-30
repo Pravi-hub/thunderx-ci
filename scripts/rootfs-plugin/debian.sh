@@ -17,7 +17,31 @@ bootstrap_rootfs() {
 
 	debug_check "${FUNCNAME[0]}:${LINENO}"
 
-	(${sudo} debootstrap --foreign --arch ${target_arch} --no-check-gpg \
+	case ${target_arch} in
+	amd64)
+		debian_arch="amd64"
+		debian_os_release=${debian_os_release:-"buster"}
+		debian_os_mirror=${debian_os_mirror:-"http://ftp.us.debian.org/debian"}
+		;;
+	arm64)
+		debian_arch="arm64"
+		debian_os_release=${debian_os_release:-"buster"}
+		debian_os_mirror=${debian_os_mirror:-"http://ftp.us.debian.org/debian"}
+		;;
+	ppc32|ppc64)
+		debian_arch="powerpc"
+		debian_os_release=${debian_os_release:-"unstable"}
+		debian_os_mirror=${debian_os_mirror:-"http://ftp.ports.debian.org/debian-ports"}
+		debootstrap_extra="--include=debian-ports-archive-keyring --exclude=powerpc-ibm-utils,powerpc-utils"
+		;;
+	*)
+		echo "${name}: ERROR: Unsupported target-arch '${target_arch}'." >&2
+		exit 1
+		;;
+	esac
+
+	(${sudo} debootstrap --foreign --arch ${debian_arch} --no-check-gpg \
+		${debootstrap_extra} \
 		${debian_os_release} ${rootfs} ${debian_os_mirror})
 
 	debug_check "${FUNCNAME[0]}:${LINENO}"
@@ -180,18 +204,29 @@ EOF
 	"
 }
 
-debian_os_release="buster"
-debian_os_mirror="http://ftp.us.debian.org/debian"
+get_default_packages() {
+	local default_packages="
+		haveged
+		login
+		net-tools
+		netcat-openbsd
+		openssh-server
+		pciutils
+		strace
+		tcpdump
+	"
+	local default_packages_arm64="
+		${default_packages}
+		efibootmgr
+		firmware-qlogic
+		firmware-bnx2x
+	"
 
-default_packages=${debian_default_packages:-"
-	efibootmgr
-	firmware-qlogic
-	firmware-bnx2x
-	haveged
-	net-tools
-	netcat-openbsd
-	openssh-server
-	pciutils
-	strace
-	tcpdump
-"}
+	if [[ ${debian_default_packages} ]]; then
+		echo ${debian_default_packages}
+	elif [[ ${target_arch} == "arm64" ]]; then
+		echo ${default_packages_arm64}
+	else
+		echo ${default_packages}
+	fi
+}

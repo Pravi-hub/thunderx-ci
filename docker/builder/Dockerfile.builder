@@ -47,7 +47,10 @@ RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.
 		g++-aarch64-linux-gnu \
 		gcc-aarch64-linux-gnu \
 		qemu-efi-aarch64 \
-		qemu-system-aarch64 \
+		qemu-system-arm \
+		gcc-powerpc-linux-gnu \
+		qemu-system-ppc \
+		openbios-ppc \
 	&& DEBIAN_FRONTEND=noninteractive apt-get -y autoremove \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& mv /usr/sbin/tcpdump /usr/bin/tcpdump

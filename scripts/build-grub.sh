@@ -132,8 +132,8 @@ test_for_src() {
 }
 
 git_clone() {
-	git_checkout ${gnulib_src} ${gnulib_repo} ${gnulib_branch}
-	git_checkout ${grub_src} ${grub_repo} ${grub_branch}
+	git_checkout_safe ${gnulib_src} ${gnulib_repo} ${gnulib_branch}
+	git_checkout_safe ${grub_src} ${grub_repo} ${grub_branch}
 }
 
 configure() {
@@ -254,13 +254,13 @@ host_arch="$(uname -m)"
 target_arch="arm64"
 
 case ${target_arch} in
-arm64|aarch64)
+arm64)
 	target_triple="aarch64-linux-gnu"
 	image_file=${image_file:-"$(pwd)/grubaa64.efi"}
 	image_format="arm64-efi"
 	;;
 *)
-	echo "${name}: ERROR: Unsupported target arch '${target_arch}'.  Must be arm64." >&2
+	echo "${name}: ERROR: Unsupported target arch '${target_arch}'." >&2
 	exit 1
 	;;
 esac

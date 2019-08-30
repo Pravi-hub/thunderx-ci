@@ -3,7 +3,7 @@
 usage () {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
-	echo "${name} - Upload Debian netboot installer to tftp server." >&2
+	echo "${name} - Upload Fedora netboot installer to tftp server." >&2
 	echo "Usage: ${name} [flags]" >&2
 	echo "Option flags:" >&2
 	echo "  -c --config-file - Config file. Default: '${config_file}'." >&2
@@ -75,6 +75,51 @@ on_exit() {
 	echo "${name}: Done: ${result}" >&2
 }
 
+
+download_fedora_files() {
+	local cmd
+	local dl_root
+
+	if [[ ${tftp_server} == "localhost" ]]; then
+		cmd=''
+		dl_root="$(pwd)"
+	else
+		cmd="ssh ${tftp_server} "
+		dl_root="/var/tftproot"
+	fi
+
+	${cmd} ls -l ${dl_root}/${host}
+
+	${cmd} dl_root=${dl_root} host=${host} files_url=${files_url} sums_url=${sums_url} 'bash -s' <<'EOF'
+
+set -e
+
+if [[ -f ${dl_root}/${host}/tci-initrd \
+	&& -f ${dl_root}/${host}/tci-kernel ]]; then
+	mv -f ${dl_root}/${host}/tci-initrd ${dl_root}/${host}/tci-initrd.old
+	mv -f ${dl_root}/${host}/tci-kernel ${dl_root}/${host}/tci-kernel.old
+fi
+
+curl --silent --show-error --location ${f30_initrd} > ${dir}/f_initrd
+curl --silent --show-error --location ${f30_kernel} > ${dir}/f_kernel
+
+wget --no-verbose -O ${dl_root}/${host}/tci-initrd ${dl_initrd}
+wget --no-verbose -O ${dl_root}/${host}/tci-kernel ${dl_kernel}
+wget --no-verbose -O /tmp/di-sums ${sums_url}/MD5SUMS
+
+echo "--- initrd ---"
+[[ -f ${dl_root}/${host}/tci-initrd.old ]] && md5sum ${dl_root}/${host}/tci-initrd.old
+md5sum ${dl_root}/${host}/tci-initrd
+cat /tmp/di-sums | egrep 'netboot/debian-installer/arm64/initrd.gz'
+echo "--- kernel ---"
+[[ -f ${dl_root}/${host}/tci-kernel.old ]] && md5sum ${dl_root}/${host}/tci-kernel.old
+md5sum ${dl_root}/${host}/tci-kernel
+cat /tmp/di-sums | egrep 'netboot/debian-installer/arm64/linux'
+echo "---------"
+
+EOF
+}
+
 #===============================================================================
 # program start
 #===============================================================================
@@ -107,18 +152,20 @@ if [[ ! ${host} ]]; then
 fi
 
 types="
-	buster
-	daily
-	sid
+	f28
+	f30
+	daily?
+	rawhide?
 "
 
-type=${type:-"buster"}
+type=${type:-"f30"}
 
 case "${type}" in
-buster)
-	release="current"
-	files_url="http://ftp.nl.debian.org/debian/dists/buster/main/installer-arm64/${release}/images/netboot/debian-installer/arm64"
-	sums_url="http://ftp.nl.debian.org/debian/dists/buster/main/installer-arm64/${release}/images/"
+f30)
+	
+	dl_url="https://download.fedoraproject.org/pub/fedora/linux/releases/${type}/Server/aarch64"
+	dl_initrd="${dl_url}/os/images/pxeboot/initrd.img"
+	dl_kernel="${dl_url}/os/images/pxeboot/vmlinuz"
 	;;
 daily)
 	release="daily"
@@ -141,33 +188,7 @@ if [[ -n "${usage}" ]]; then
 	exit 0
 fi
 
-ssh ${tftp_server} ls -l /var/tftproot/${host}
-
-ssh ${tftp_server} host=${host} files_url=${files_url} sums_url=${sums_url} 'bash -s' <<'EOF'
-
-set -e
-
-if [[ -f /var/tftproot/${host}/tci-initrd \
-	&& -f /var/tftproot/${host}/tci-kernel ]]; then
-	mv -f /var/tftproot/${host}/tci-initrd /var/tftproot/${host}/tci-initrd.old
-	mv -f /var/tftproot/${host}/tci-kernel /var/tftproot/${host}/tci-kernel.old
-fi
-
-wget --no-verbose -O /var/tftproot/${host}/tci-initrd ${files_url}/initrd.gz
-wget --no-verbose -O /var/tftproot/${host}/tci-kernel ${files_url}/linux
-wget --no-verbose -O /tmp/di-sums ${sums_url}/MD5SUMS
-
-echo "--- initrd ---"
-[[ -f /var/tftproot/${host}/tci-initrd.old ]] && md5sum /var/tftproot/${host}/tci-initrd.old
-md5sum /var/tftproot/${host}/tci-initrd
-cat /tmp/di-sums | egrep 'netboot/debian-installer/arm64/initrd.gz'
-echo "--- kernel ---"
-[[ -f /var/tftproot/${host}/tci-kernel.old ]] && md5sum /var/tftproot/${host}/tci-kernel.old
-md5sum /var/tftproot/${host}/tci-kernel
-cat /tmp/di-sums | egrep 'netboot/debian-installer/arm64/linux'
-echo "---------"
-
-EOF
+download_fedora_files
 
 echo "${name}: ${host} files ready on ${tftp_server}." >&2
 

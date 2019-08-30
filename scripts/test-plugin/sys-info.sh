@@ -1,4 +1,4 @@
-# UnixBench test plug-in.
+# System info test plug-in.
 
 SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "${BASH_SOURCE%/*}/.." && pwd)"}
 
@@ -13,17 +13,16 @@ test_usage_sys_info() {
 
 test_packages_sys_info() {
 	local rootfs_type=${1}
+	local target_arch=${2}
 
-	case "${rootfs_type}" in
-	alpine)
+	case "${rootfs_type}-${target_arch}" in
+	alpine-arm64)
 		echo "dmidecode"
 		;;
-	debian)
+	debian-arm64)
 		echo "dmidecode"
 		;;
 	*)
-		echo "${FUNCNAME[0]}: ERROR: Unknown rootfs type: '${rootfs_type}'" >&2
-		exit 1
 		;;
 	esac
 }
@@ -76,7 +75,9 @@ id | tee ./results/id.log
 cat /proc/partitions | tee ./results/partitions.log
 printenv | tee ./results/printenv.log
 uname -a | tee ./results/uname.log
-/usr/sbin/dmidecode | tee ./results/dmidecode.log
+if [[ -f /usr/sbin/dmidecode ]]; then
+	/usr/sbin/dmidecode | tee ./results/dmidecode.log
+fi
 
 tar -czvf ${HOME}/sys-info-results.tar.gz  ./results
 EOF

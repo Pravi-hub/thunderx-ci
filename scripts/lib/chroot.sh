@@ -7,6 +7,12 @@ get_qemu_static() {
 	amd64--arm64)
 		qemu_static="/usr/bin/qemu-aarch64-static"
 		;;
+	amd64--ppc32)
+		qemu_static="/usr/bin/qemu-ppc-static"
+		;;
+	amd64--ppc64)
+		qemu_static="/usr/bin/qemu-ppc64-static"
+		;;
 	arm64--amd64)
 		qemu_static="/usr/bin/qemu-x86_64-static"
 		;;
