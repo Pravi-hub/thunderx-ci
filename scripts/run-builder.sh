@@ -113,7 +113,7 @@ if [[ -n "${usage}" ]]; then
 fi
 
 if [[ ${tag} ]]; then
-	show_tag
+	echo "${DOCKER_TAG}"
 	exit 0
 fi
 

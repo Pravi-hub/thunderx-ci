@@ -31,13 +31,14 @@ usage() {
 	echo "  --hda                  - QEMU IDE hard disk image hda. Default: '${hda}'." >&2
 	echo "  --hdb                  - QEMU IDE hard disk image hdb. Default: '${hdb}'." >&2
 	echo "  --pid-file             - QEMU IDE hard disk image hdb. Default: '${pid_file}'." >&2
+	echo "  --p9-share             - Plan9 share directory. Default: '${p9_share}'." >&2
 	eval "${old_xtrace}"
 }
 
 short_opts="a:c:e:f:hi:k:m:o:r:stv"
 long_opts="arch:,kernel-cmd:,ether-mac:,hostfwd-offset:,help,initrd:,\
 kernel:,modules:,out-file:,disk-image:,systemd-debug,qemu-tap,verbose,\
-hda:,hdb:,pid-file:"
+hda:,hdb:,pid-file:,p9-share:"
 
 opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
 
@@ -115,6 +116,10 @@ while true ; do
 		pid_file="${2}"
 		shift 2
 		;;
+	--p9-share)
+		p9_share="${2}"
+		shift 2
+		;;
 	--)
 		shift
 		break
@@ -127,6 +132,7 @@ while true ; do
 done
 
 MODULES_ID=${MODULES_ID:-"kernel_modules"}
+P9_SHARE_ID=${SHARE_ID:-"p9_share"}
 
 host_arch=$(get_arch "$(uname -m)")
 target_arch=${target_arch:-"${host_arch}"}
@@ -270,12 +276,16 @@ if [[ ${hdb} ]]; then
 	qemu_args+=" -hdb ${hdb}"
 fi
 
-
-if [[ ${modules} ]]; then # TODO
+if [[ ${p9_share} ]]; then
+	check_directory "${p9_share}"
 	qemu_args+=" \
-		-fsdev local,id=modules,security_model=none,path=${modules} \
-		-device virtio-9p-device,fsdev=modules,mount_tag=${MODULES_ID} \
-	"
+		-virtfs local,id=${P9_SHARE_ID},path=${p9_share},security_model=none,mount_tag=${P9_SHARE_ID}"
+	echo "${name}: INFO: mount -t p9 -o trans=virtio ${P9_SHARE_ID} <mount-point> -oversion=p92000.L" >&2
+fi
+
+if [[ ${modules} ]]; then
+	qemu_args+=" \
+		-virtfs local,id=${MODULES_ID},path=${modules},security_model=none,mount_tag=${MODULES_ID}"
 fi
 
 if [[ ${disk_image} ]]; then # TODO
