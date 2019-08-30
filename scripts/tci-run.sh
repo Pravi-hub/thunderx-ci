@@ -249,13 +249,15 @@ build_kernel() {
 	local repo=${1}
 	local branch=${2}
 	local config=${3}
-	local src_dir=${4}
-	local build_dir=${5}
-	local install_dir=${6}
+	local fixup_spec=${4}
+	local platform_args=${5}
+	local src_dir=${6}
+	local build_dir=${7}
+	local install_dir=${8}
 
 	rm -rf ${build_dir} ${install_dir}
 
-	git_checkout ${src_dir} ${repo} ${branch}
+	git_checkout_safe ${src_dir} ${repo} ${branch}
 
 	${SCRIPTS_TOP}/build-linux-kernel.sh \
 		--build-dir=${build_dir} \
@@ -270,20 +272,35 @@ build_kernel() {
 				> ${build_dir}/.config
 		fi
 	else
-		${SCRIPTS_TOP}/set-config-opts.sh --verbose \
-			${SCRIPTS_TOP}/tx2-fixup.spec ${build_dir}/.config
+		bash -x ${SCRIPTS_TOP}/set-config-opts.sh \
+			--verbose \
+			${platform_args:+"--platform-args='${platform_args}'"} \
+			${fixup_spec} ${build_dir}/.config
 	fi
 
-	${SCRIPTS_TOP}/build-linux-kernel.sh \
-		--build-dir=${build_dir} \
-		--install-dir=${install_dir} \
-		${target_arch} ${src_dir} oldconfig
-
-	${SCRIPTS_TOP}/build-linux-kernel.sh \
+	bash -x ${SCRIPTS_TOP}/build-linux-kernel.sh \
 		--build-dir=${build_dir} \
 		--install-dir=${install_dir} \
 		${verbose:+--verbose} \
-		${target_arch} ${src_dir} fresh
+		${target_arch} ${src_dir} all
+}
+
+build_kernel_with_initrd() {
+	local src_dir=${1}
+	local build_dir=${2}
+	local install_dir=${3}
+	local image_dir=${4}
+
+	check_file ${image_dir}/initrd
+	ln -sf ./initrd ${image_dir}/initrd.cpio
+
+	#export make_options_user="CONFIG_INITRAMFS_SOURCE=${image_dir}/initrd.cpio"
+
+	make_options_user="CONFIG_INITRAMFS_SOURCE=${image_dir}/initrd.cpio" ${SCRIPTS_TOP}/build-linux-kernel.sh \
+		--build-dir=${build_dir} \
+		--install-dir=${install_dir} \
+		${verbose:+--verbose} \
+		${target_arch} ${src_dir} Image.gz
 }
 
 build_bootstrap() {
@@ -318,7 +335,7 @@ build_rootfs() {
 	check_directory "${modules}"
 
 	local extra_packages
-	extra_packages+="$(test_packages_${test_name//-/_} ${rootfs_type})"
+	extra_packages+="$(test_packages_${test_name//-/_} ${rootfs_type} ${target_arch})"
 
 	${SCRIPTS_TOP}/build-rootfs.sh \
 		--arch=${target_arch} \
@@ -436,6 +453,8 @@ SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "${BASH_SOURCE%/*}" && pwd)"}
 DOCKER_TOP=${DOCKER_TOP:-"$(cd "${SCRIPTS_TOP}/../docker" && pwd)"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
+source ${SCRIPTS_TOP}/rootfs-plugin/plugin.sh
+source ${SCRIPTS_TOP}/test-plugin/plugin.sh
 
 config_file="${config_file:-${SCRIPTS_TOP}/tci-run.conf}"
 
@@ -459,17 +478,7 @@ process_opts "${@}"
 
 set -x
 
-TCI_ROOT=${TCI_ROOT:-"$(cd ${SCRIPTS_TOP}/.. && pwd)"}
-TCI_TEST_ROOT=${TCI_TEST_ROOT:-"${TEST_ROOT}"}
-TCI_TEST_ROOT=${TCI_TEST_ROOT:-"$(pwd)"}
-TCI_HISTFILE=${TCI_HISTFILE:-"/tci--test/.bash_history"}
-
-rootfs_types=${rootfs_types:-"debian"}
-rootfs_types="${rootfs_types//,/ }"
-
-test_types=${test_types:-"ltp"}
-test_types="${test_types//,/ }"
-
+work_dir=${work_dir:-"/tci--test"}
 test_machine=${test_machine:-"t88"}
 build_name=${build_name:-"${name%.*}-$(date +%m.%d)"}
 target_arch=${target_arch:-"arm64"}
@@ -477,14 +486,40 @@ host_arch=$(get_arch "$(uname -m)")
 
 top_build_dir="$(pwd)/${build_name}"
 
+TCI_ROOT=${TCI_ROOT:-"$(cd ${SCRIPTS_TOP}/.. && pwd)"}
+TCI_TEST_ROOT=${TCI_TEST_ROOT:-"${TEST_ROOT}"}
+TCI_TEST_ROOT=${TCI_TEST_ROOT:-"$(pwd)"}
+TCI_HISTFILE=${TCI_HISTFILE:-"${work_dir}/${build_name}--bash_history"}
+
+rootfs_types=${rootfs_types:-"debian"}
+rootfs_types="${rootfs_types//,/ }"
+
+test_types=${test_types:-"sys-info"}
+test_types="${test_types//,/ }"
+
 kernel_repo=${kernel_repo:-"https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"}
-kernel_branch=${kernel_branch:-"linux-5.1.y"}
+kernel_branch=${kernel_branch:-"linux-5.2.y"}
 kernel_config=${kernel_config:-"defconfig"}
 kernel_repo_name="${kernel_repo##*/}"
 kernel_repo_name="${kernel_repo_name%.*}"
 kernel_src_dir=${kernel_src_dir:-"$(pwd)/${kernel_repo_name}"}
 kernel_build_dir="${top_build_dir}/${target_arch}-kernel-build"
 kernel_install_dir="${top_build_dir}/${target_arch}-kernel-install"
+
+case ${target_arch} in
+arm64)
+	fixup_spec="${SCRIPTS_TOP}/tx2-fixup.spec"
+	kernel_image="${kernel_install_dir}/boot/Image"
+	;;
+ppc*)
+	fixup_spec="${SCRIPTS_TOP}/ppc-fixup.spec"
+	kernel_image="${kernel_install_dir}/boot/vmlinux.strip"
+	;;
+*)
+	fixup_spec="${SCRIPTS_TOP}/generic-fixup.spec"
+	kernel_image="${kernel_install_dir}/boot/vmlinux.strip"
+	;;
+esac
 
 if [[ ${help_all} ]]; then
 	set +o xtrace
@@ -526,9 +561,9 @@ else
 			-e build_name \
 			-v ${TCI_ROOT}:/tci:ro \
 			-e TCI_ROOT=/tci \
-			-v ${TCI_TEST_ROOT}:/tci--test:rw,z \
-			-e TCI_TEST_ROOT=/tci--test \
-			-w /tci--test \
+			-v ${TCI_TEST_ROOT}:${work_dir}:rw,z \
+			-e TCI_TEST_ROOT=${work_dir} \
+			-w ${work_dir} \
 			-e HISTFILE=${TCI_HISTFILE} \
 		" \
 		-- "${docker_cmd}"
@@ -563,7 +598,8 @@ if [[ ${step_build_kernel} ]]; then
 	trap "on_exit 'build_kernel failed.'" EXIT
 
 	build_kernel ${kernel_repo} ${kernel_branch} ${kernel_config} \
-		${kernel_src_dir} ${kernel_build_dir} ${kernel_install_dir}
+		${fixup_spec} "${kernel_platform_args}" ${kernel_src_dir} \
+		${kernel_build_dir} ${kernel_install_dir}
 fi
 
 for rootfs_type in ${rootfs_types}; do
@@ -592,6 +628,9 @@ for rootfs_type in ${rootfs_types}; do
 				${bootstrap_dir} ${kernel_install_dir}
 			create_sysroot ${rootfs_type} ${image_dir}/rootfs \
 				${image_dir}/sysroot
+			#build_kernel_with_initrd ${kernel_src_dir} \
+			#	${kernel_build_dir} ${kernel_install_dir} \
+			#	${image_dir}
 		fi
 
 		if [[ ${step_build_tests} ]]; then
@@ -602,13 +641,13 @@ for rootfs_type in ${rootfs_types}; do
 
 		if [[ ${step_run_qemu_tests} ]]; then
 			trap "on_exit 'run_qemu_tests failed.'" EXIT
-			run_qemu_tests ${kernel_install_dir}/boot/Image \
+			run_qemu_tests ${kernel_image} \
 				${image_dir} ${tests_dir} ${results_dir}
 		fi
 
 		if [[ ${step_run_remote_tests} ]]; then
 			trap "on_exit 'run_remote_tests failed.'" EXIT
-			run_remote_tests ${kernel_install_dir}/boot/Image \
+			run_remote_tests ${kernel_image} \
 				${image_dir} ${tests_dir} ${results_dir}
 		fi
 	done

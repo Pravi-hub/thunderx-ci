@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 usage() {
+	local target_list="$(clean_ws ${targets})"
+	local op_list="$(clean_ws ${ops})"
+
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
 	echo "${name} - Builds linux kernel." >&2
@@ -12,11 +15,11 @@ usage() {
 	echo "  -l --local-version - Default: '${local_version}'." >&2
 	echo "  -v --verbose       - Verbose execution." >&2
 	echo "Args:" >&2
-	echo "  <target>     - Build target {$(clean_ws ${targets})}." >&2
+	echo "  <target>     - Build target {${target_list}}." >&2
 	echo "                 Default: '${target}'." >&2
 	echo "  <kernel-src> - Kernel source directory." >&2
 	echo "                 Default: '${kernel_src}'." >&2
-	echo "  <op>         - Build operation {$(clean_ws ${ops})}." >&2
+	echo "  <op>         - Build operation {${op_list}}." >&2
 	echo "                 Default: '${op}'." >&2
 	echo "Info:" >&2
 	echo "  ${cpus} CPUs available." >&2
@@ -93,8 +96,11 @@ on_exit() {
 	local end_time="$(date)"
 	local sec="${SECONDS}"
 
-	set +x
+	if [ -d ${tmp_dir} ]; then
+		rm -rf ${tmp_dir}
+	fi
 
+	set +x
 	echo "" >&2
 	echo "${name}: Done:          result=${result}" >&2
 	echo "${name}: target:        ${target}" >&2
@@ -107,6 +113,48 @@ on_exit() {
 	echo "${name}: start_time:    ${start_time}" >&2
 	echo "${name}: end_time:      ${end_time}" >&2
 	echo "${name}: duration:      ${sec} sec ($(sec_to_min ${sec} min)" >&2
+	exit ${result}
+}
+
+make_fresh() {
+	cp ${build_dir}/.config ${tmp_dir}/config.tmp
+	rm -rf ${build_dir}/{*,.*} &>/dev/null || :
+	eval "make ${make_options} mrproper"
+	eval "make ${make_options} defconfig"
+	cp ${tmp_dir}/config.tmp ${build_dir}/.config
+	eval "make ${make_options} olddefconfig"
+}
+
+make_targets() {
+	eval "make ${make_options} savedefconfig"
+	eval "make ${make_options} ${make_targets}"
+}
+
+install_image() {
+	mkdir -p "${install_dir}/boot"
+	cp ${build_dir}/{defconfig,System.map,vmlinux} ${install_dir}/boot/
+	cp ${build_dir}/.config ${install_dir}/boot/config
+	${target_tool_prefix}strip -s -R .comment ${build_dir}/vmlinux -o ${install_dir}/boot/vmlinux.strip
+
+	if [[ -z ${target_copy} ]]; then
+		eval "make ${make_options} install"
+	else
+		for ((i = 0; i <= ${#target_copy[@]} - 1; i+=2)); do
+			cp --no-dereference ${build_dir}/${target_copy[i]} ${install_dir}/${target_copy[i+1]}
+		done
+	fi
+	if [[ -n ${target_copy_opt} ]]; then
+		for ((i = 0; i <= ${#target_copy_opt[@]} - 1; i+=2)); do
+			if [[ -f ${target_copy_opt[i]} ]]; then
+				cp --no-dereference ${build_dir}/${target_copy_opt[i]} ${install_dir}/${target_copy_opt[i+1]}
+			fi
+		done
+	fi
+}
+
+install_modules() {
+	mkdir -p "${install_dir}/lib/modules"
+	eval "make ${make_options} modules_install"
 }
 
 #===============================================================================
@@ -121,35 +169,37 @@ trap "on_exit 'failed.'" EXIT
 SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "${BASH_SOURCE%/*}" && pwd)"}
 source ${SCRIPTS_TOP}/lib/util.sh
 
-process_opts "${@}"
-
 targets="
 	amd64
 	arm64
 	arm64_be
 	native
-	powerpc
-	powerpc64le
+	ppc32
+	ppc64
+	ppc64le
 	ps3
 	x86_64
 "
 ops="
-	batch_build
-	build
+	all
 	defconfig
 	fresh
-	gconfig
 	headers
-	help
 	install
-	menuconfig
-	oldconfig
+	modules_install
 	rebuild
 	savedefconfig
+	targets
+	gconfig
+	menuconfig
+	oldconfig
+	olddefconfig
 	xconfig
 "
 
 cpus="$(cpu_count)"
+
+process_opts "${@}"
 
 if [[ -z "${build_dir}" ]]; then
 	build_dir="$(pwd)/${target}-kernel-build"
@@ -181,8 +231,12 @@ declare -a target_copy
 
 case "${target}" in
 amd64)
-	echo "${name}: TODO target: '${target}'" >&2
-	exit 1
+	target_tool_prefix=${target_tool_prefix:-"x86_64-linux-gnu-"}
+	target_make_options="ARCH=x86_64 CROSS_COMPILE='${ccache}${target_tool_prefix}'"
+	target_defconfig="${target}_defconfig"
+	target_copy=(
+		vmlinux boot/
+	)
 	;;
 arm64|arm64_be)
 	target_tool_prefix=${target_tool_prefix:-"aarch64-linux-gnu-"}
@@ -198,15 +252,15 @@ native)
 	target_defconfig="defconfig"
 	make_targets="all"
 	;;
-powerpc)
+ppc32|ppc64)
 	target_tool_prefix=${target_tool_prefix:-"powerpc-linux-gnu-"}
 	target_make_options="ARCH=powerpc CROSS_COMPILE='${ccache}${target_tool_prefix}'"
-	target_defconfig="defconfig"
+	target_defconfig="ppc64_defconfig"
 	target_copy=(
 		vmlinux boot/
 	)
 	;;
-powerpc64le)
+ppc64le)
 	target_tool_prefix=${target_tool_prefix:-"powerpc64le-linux-gnu-"}
 	target_make_options="ARCH=powerpc CROSS_COMPILE='${ccache}${target_tool_prefix}'"
 	target_defconfig="defconfig"
@@ -217,21 +271,13 @@ powerpc64le)
 ps3)
 	target_tool_prefix=${target_tool_prefix:-"powerpc-linux-gnu-"}
 	target_make_options="ARCH=powerpc CROSS_COMPILE='""${ccache}${target_tool_prefix}""'"
-	target_defconfig="ps3_defconfig"
+	target_defconfig="${target}_defconfig"
 	target_copy=(
 		vmlinux boot/
 		arch/powerpc/boot/dtbImage.ps3.bin boot/linux
 	)
 	target_copy_opt=(
 		arch/powerpc/boot/otheros.bld boot/
-	)
-	;;
-x86_64)
-	target_tool_prefix=${target_tool_prefix:-"x86_64-linux-gnu-"}
-	target_make_options="ARCH=x86_64 CROSS_COMPILE='${ccache}${target_tool_prefix}'"
-	target_defconfig="x86_64_defconfig"
-	target_copy=(
-		vmlinux boot/
 	)
 	;;
 *)
@@ -245,7 +291,7 @@ if [[ -n "${verbose}" ]]; then
 	make_options_extra="V=1"
 fi
 
-make_options="-j${cpus} ${target_make_options} INSTALL_MOD_PATH='${install_dir}' INSTALL_PATH='${install_dir}/boot' INSTALLKERNEL=non-existent-file O='${build_dir}' ${make_options_extra}"
+make_options="-j${cpus} ${target_make_options} INSTALL_MOD_PATH='${install_dir}' INSTALL_PATH='${install_dir}/boot' INSTALLKERNEL=non-existent-file O='${build_dir}' ${make_options_extra} ${make_options_user}"
 
 start_time="$(date)"
 SECONDS=0
@@ -257,82 +303,54 @@ mkdir -p ${CCACHE_DIR}
 
 cd ${kernel_src}
 
-trap on_exit EXIT
+tmp_dir="$(mktemp --tmpdir --directory ${name}.XXXX)"
 
-while true ; do
-	case "${op}" in
-	batch_build|build)
-		eval "make ${make_options} savedefconfig"
-		eval "make ${make_options} ${make_targets}"
-		if [[ "${op}" == "batch_build" ]]; then
-			break
-		fi
-		op="install"
-		;;
-	defconfig)
-		if [[ -n ${target_defconfig} ]]; then
-			eval "make ${make_options} ${target_defconfig}"
-		else
-			eval "make ${make_options} defconfig"
-		fi
-		eval "make ${make_options} savedefconfig"
-		break
-		;;
-	fresh)
-		cp ${build_dir}/.config /tmp/config.tmp
-		rm -rf ${build_dir}/{*,.*} &>/dev/null || :
-		eval "make ${make_options} mrproper"
+case "${op}" in
+all)
+	make_fresh
+	make_targets
+	install_image
+	install_modules
+	;;
+defconfig)
+	if [[ -n ${target_defconfig} ]]; then
+		eval "make ${make_options} ${target_defconfig}"
+	else
 		eval "make ${make_options} defconfig"
-		cp /tmp/config.tmp ${build_dir}/.config
-		eval "make ${make_options} oldconfig"
-		op="build"
-		;;
-	headers)
-		eval "make ${make_options} mrproper"
-		eval "make ${make_options} defconfig"
-		eval "make ${make_options} prepare"
-		break
-		;;
-	install)
-		mkdir -p "${install_dir}/boot" "${install_dir}/lib/modules"
-		cp ${build_dir}/{defconfig,System.map,vmlinux} ${install_dir}/boot/
-		cp ${build_dir}/.config ${install_dir}/boot/config
-		${target_tool_prefix}strip -s -R .comment ${build_dir}/vmlinux -o ${install_dir}/boot/vmlinux.strip
-
-		if [[ -z ${target_copy} ]]; then
-			eval "make ${make_options} install"
-		else
-			for ((i = 0; i <= ${#target_copy[@]} - 1; i+=2)); do
-				cp --no-dereference ${build_dir}/${target_copy[i]} ${install_dir}/${target_copy[i+1]}
-			done
-		fi
-		if [[ -n ${target_copy_opt} ]]; then
-			for ((i = 0; i <= ${#target_copy_opt[@]} - 1; i+=2)); do
-				if [[ -f ${target_copy_opt[i]} ]]; then
-					cp --no-dereference ${build_dir}/${target_copy_opt[i]} ${install_dir}/${target_copy_opt[i+1]}
-				fi
-			done
-		fi
-		eval "make ${make_options} modules_install"
-		break
-		;;
-	rebuild)
-		eval "make ${make_options} clean"
-		op="build"
-		;;
-	savedefconfig)
-		eval "make ${make_options} savedefconfig"
-		break
-		;;
-	gconfig|menuconfig|oldconfig|olddefconfig|xconfig)
-		eval "make ${make_options} ${op}"
-		eval "make ${make_options} savedefconfig"
-		break
-		;;
-	*)
-		echo "${name}: INFO: Unknown op: '${op}'" >&2
-		eval "make ${make_options} ${op}"
-		break
-		;;
-	esac
-done
+	fi
+	eval "make ${make_options} savedefconfig"
+	;;
+fresh)
+	make_fresh
+	;;
+headers)
+	eval "make ${make_options} mrproper"
+	eval "make ${make_options} defconfig"
+	eval "make ${make_options} prepare"
+	;;
+install)
+	install_image
+	install_modules
+	;;
+modules_install)
+	install_modules
+	;;
+rebuild)
+	eval "make ${make_options} clean"
+	make_targets
+	;;
+savedefconfig)
+	eval "make ${make_options} savedefconfig"
+	;;
+targets)
+	make_targets
+	;;
+gconfig | menuconfig | oldconfig | olddefconfig | xconfig)
+	eval "make ${make_options} ${op}"
+	eval "make ${make_options} savedefconfig"
+	;;
+*)
+	echo "${name}: INFO: Unknown op: '${op}'" >&2
+	eval "make ${make_options} ${op}"
+	;;
+esac

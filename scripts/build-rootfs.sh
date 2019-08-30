@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
-
-name="${0##*/}"
-
-SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
-RELAY_TOP=${RELAY_TOP:-"$( cd "${SCRIPTS_TOP}/../relay" && pwd )"}
-
-source ${SCRIPTS_TOP}/lib/util.sh
-source ${SCRIPTS_TOP}/lib/chroot.sh
-
 usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
@@ -372,12 +362,24 @@ write_tci_client_script() {
 #===============================================================================
 # program start
 #===============================================================================
+name="${0##*/}"
+
+SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
+RELAY_TOP=${RELAY_TOP:-"$( cd "${SCRIPTS_TOP}/../relay" && pwd )"}
+
+source ${SCRIPTS_TOP}/lib/util.sh
+source ${SCRIPTS_TOP}/lib/chroot.sh
+
+trap "on_exit" EXIT
+set -e
+
 
 sudo="sudo -S"
 
 process_opts "${@}"
 
 rootfs_type=${rootfs_type:-"debian"}
+TARGET_HOSTNAME=${TARGET_HOSTNAME:-"tci-tester"}
 
 source "${SCRIPTS_TOP}/rootfs-plugin/${rootfs_type}.sh"
 
@@ -445,7 +447,7 @@ if [ ${step_rootfs_setup} ]; then
 		${sudo} rsync -a --delete ${bootstrap_src}/ ${rootfs_dir}/
 	fi
 
-	setup_packages ${rootfs_dir} ${default_packages} ${extra_packages}
+	setup_packages ${rootfs_dir} $(get_default_packages) ${extra_packages}
 
 	setup_initrd_boot ${rootfs_dir}
 	setup_login ${rootfs_dir}

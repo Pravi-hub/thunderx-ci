@@ -191,10 +191,18 @@ EOF
 
 alpine_os_mirror="http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/"
 
-default_packages=${alpine_default_packages:-"
-	net-tools
-	netcat-openbsd
-	pciutils
-	strace
-	tcpdump
-"}
+get_default_packages() {
+	local default_packages="
+		net-tools
+		netcat-openbsd
+		pciutils
+		strace
+		tcpdump
+	"
+
+	if [[ ${alpine_default_packages} ]]; then
+		echo ${alpine_default_packages}
+	else
+		echo ${default_packages}
+	fi
+}

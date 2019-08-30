@@ -7,6 +7,7 @@ name="${0##*/}"
 SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
+TARGET_HOSTNAME=${TARGET_HOSTNAME:-"tci-tester"}
 
 usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
@@ -125,6 +126,8 @@ while true ; do
 	esac
 done
 
+MODULES_ID=${MODULES_ID:-"kernel_modules"}
+
 host_arch=$(get_arch "$(uname -m)")
 target_arch=${target_arch:-"${host_arch}"}
 hostfwd_offset=${hostfwd_offset:-"20000"}
@@ -140,10 +143,14 @@ if [[ -n "${usage}" ]]; then
 	exit 0
 fi
 
-if [[ "${target_arch}" != "arm64" ]]; then
-	echo "${name}: ERROR: Unsupported target arch '${target_arch}'.  Must be arm64." >&2
+case ${target_arch} in
+arm64|ppc*)
+	;;
+*)
+	echo "${name}: ERROR: Unsupported target arch '${target_arch}'." >&2
 	exit 1
-fi
+	;;
+esac
 
 if [[ ! ${kernel} ]]; then
 	echo "${name}: ERROR: Must provide --kernel option." >&2
@@ -175,6 +182,10 @@ fi
 # --- end common ---
 
 setup_efi() {
+	local efi_code_src
+	local efi_vars_src
+	local efi_full_src
+
 	case "${target_arch}" in
 	amd64)
 		efi_code_src="/usr/share/OVMF/OVMF_CODE.fd"
@@ -202,21 +213,34 @@ qemu_append_args="${kernel_cmd}"
 
 case "${host_arch}--${target_arch}" in
 amd64--amd64)
+	have_efi=1
+	have_virtio=1
 	qemu_exe="qemu-system-x86_64"
-	qemu_args+=" -machine accel=kvm -cpu host -m 2048"
+	qemu_args+=" -machine accel=kvm -cpu host -m 2048 -smp 2"
 	;;
 amd64--arm64)
+	have_efi=1
+	have_virtio=1
 	qemu_exe="qemu-system-aarch64"
-	qemu_args+=" -machine virt,gic-version=3 -cpu cortex-a57 -m 5120"
-	#qemu_args+=" -machine virt,gic-version=3 -cpu cortex-a57 -m 15360"
+	qemu_args+=" -machine virt,gic-version=3 -cpu cortex-a57 -m 5120 -smp 2"
+	#qemu_args+=" -machine virt,gic-version=3 -cpu cortex-a57 -m 15360 -smp 2"
+	;;
+amd64--ppc*)
+	qemu_exe="qemu-system-ppc64"
+	#qemu_args+=" -machine cap-htm=off -m 2048"
+	qemu_args+=" -machine pseries,cap-htm=off -m 2048"
 	;;
 arm64--amd64)
+	have_efi=1
+	have_virtio=1
 	qemu_exe="qemu-system-x86_64"
-	qemu_args+=" -machine pc-q35-2.8 -cpu kvm64 -m 2048"
+	qemu_args+=" -machine pc-q35-2.8 -cpu kvm64 -m 2048 -smp 2"
 	;;
 arm64--arm64)
+	have_efi=1
+	have_virtio=1
 	qemu_exe="qemu-system-aarch64"
-	qemu_args+=" -machine virt,gic-version=3,accel=kvm -cpu host -m 4096"
+	qemu_args+=" -machine virt,gic-version=3,accel=kvm -cpu host -m 4096 -smp 2"
 	;;
 *)
 	echo "${name}: ERROR: Unsupported host--target combo: '${"${host_arch}--${target_arch}"}'." >&2
@@ -225,7 +249,7 @@ arm64--arm64)
 esac
 
 
-if [[ -n ${qemu_tap} ]]; then
+if [[ ${qemu_tap} ]]; then
 	# FIXME: Needs test.
 	# FIXME: Use virtio-net-device or virtio-net-pci???
 	qemu_args+=" \
@@ -237,11 +261,12 @@ else
 
 	echo "${name}: SSH fwd = ${ssh_fwd}" >&2
 
-	# FIXME: Use virtio-net-device or virtio-net-pci???
-	qemu_args+=" \
-		-netdev user,id=eth0,hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME} \
-		-device virtio-net-device,netdev=eth0 \
-	"
+virtio_net_type="virtio-net-device"
+virtio_net_type="virtio-net-pci"
+
+if [[ ${virtio_net_type} ]]; then
+	qemu_args+=" -netdev user,id=eth0,hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME}"
+	qemu_args+=" -device ${virtio_net_type},netdev=eth0"
 fi
 
 if [[ ${initrd} ]]; then
@@ -286,7 +311,11 @@ if [[ ${pid_file} ]]; then
 	qemu_args+=" -pidfile ${pid_file}"
 fi
 
-setup_efi
+if [[ ${have_efi} ]]; then
+	setup_efi
+	qemu_args+="-drive if=pflash,file=${efi_code},format=raw,readonly"
+	qemu_args+="-drive if=pflash,file=${efi_vars},format=raw"
+fi
 
 ls -l /dev/kvm || :
 cat /etc/group || :
@@ -294,11 +323,8 @@ id
 
 cmd="${qemu_exe} \
 	-name tci-vm \
-	-smp 2 \
 	-object rng-random,filename=/dev/urandom,id=rng0 \
 	-device virtio-rng-pci,rng=rng0 \
-	-drive if=pflash,file=${efi_code},format=raw,readonly \
-	-drive if=pflash,file=${efi_vars},format=raw \
 	${qemu_args} \
 	-append '${qemu_append_args}' \
 "

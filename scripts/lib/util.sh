@@ -130,8 +130,41 @@ get_arch() {
 	local a=${1}
 
 	case "${a}" in
-	arm64|aarch64) echo "arm64" ;;
-	amd64|x86_64)  echo "amd64" ;;
+	arm64|aarch64)			echo "arm64" ;;
+	amd64|x86_64)			echo "amd64" ;;
+	ppc|powerpc|ppc32|powerpc32)	echo "ppc32" ;;
+	ppc64|powerpc64)		echo "ppc64" ;;
+	ppc64le|powerpc64le)		echo "ppc64le" ;;
+	*)
+		echo "${name}: ERROR: Bad arch '${a}'" >&2
+		exit 1
+		;;
+	esac
+}
+
+get_triple() {
+	local a=${1}
+
+	case "${a}" in
+	amd64)		echo "x86_64-linux-gnu" ;;
+	arm64)		echo "aarch64-linux-gnu" ;;
+	ppc32)		echo "powerpc-linux-gnu" ;;
+	ppc64)		echo "powerpc64-linux-gnu" ;;
+	ppc64le)	echo "powerpc64le-linux-gnu" ;;
+	*)
+		echo "${name}: ERROR: Bad arch '${a}'" >&2
+		exit 1
+		;;
+	esac
+}
+
+kernel_arch() {
+	local a=${1}
+
+	case "${a}" in
+	amd64)		echo "x86_64" ;;
+	arm64*)		echo "arm64" ;;
+	ppc*)		echo "powerpc" ;;
 	*)
 		echo "${name}: ERROR: Bad arch '${a}'" >&2
 		exit 1
@@ -205,7 +238,58 @@ wait_pid() {
 	done
 }
 
-git_checkout() {
+git_set_remote() {
+	local dir=${1}
+	local repo=${2}
+	local remote
+
+	remote="$(git -C ${dir} remote -v | egrep 'origin' | cut -f2 | cut -d ' ' -f1)"
+
+	if [[ ${?} -ne 0 ]]; then
+		echo "${name}: ERROR: Bad git repo ${dir}." >&2
+		exit 1
+	fi
+
+	if [[ ${remote} != ${repo} ]]; then
+		echo "${name}: INFO: Switching git remote ${remote} => ${repo}." >&2
+		git -C ${dir} remote set-url origin ${repo}
+		git -C ${dir} remote -v
+	fi
+}
+
+git_checkout_safe() {
+	local dir=${1}
+	local repo=${2}
+	local branch=${3:-'master'}
+
+	if [[ ! -d "${dir}" ]]; then
+		mkdir -p "${dir}/.."
+		git clone ${repo} "${dir}"
+	else
+		local backup
+		backup="backup-$(date +%Y.%m.%d-%H.%M.%S)"
+
+		if [[ $(git -C ${dir} status --porcelain) ]]; then
+			echo "${name}: INFO: Found local changes: ${dir}." >&2
+			git -C ${dir} add .
+			git -C ${dir} commit -m ${backup}
+		fi
+
+		# FIXME: need to check with branch name???
+		if git -C ${dir} diff --no-ext-diff --quiet --exit-code origin; then
+			echo "${name}: INFO: Found local commits: ${dir}." >&2
+			git -C ${dir} branch --copy ${backup}
+			echo "${name}: INFO: Saved local commits to branch ${backup}." >&2
+		fi
+	fi
+
+	git_set_remote ${dir} ${repo}
+	git -C ${dir} remote update
+	git -C ${dir} checkout --force ${branch}
+	#git -C ${dir} pull
+}
+
+git_checkout_force() {
 	local dir=${1}
 	local repo=${2}
 	local branch=${3:-'master'}
@@ -215,6 +299,7 @@ git_checkout() {
 		git clone ${repo} "${dir}"
 	fi
 
+	git_set_remote ${dir} ${repo}
 	git -C ${dir} remote update
 	git -C ${dir} checkout --force ${branch}
 	git -C ${dir} pull
@@ -227,18 +312,3 @@ if [[ ${PS4} == '+ ' ]]; then
 		export PS4='\[\033[0;33m\]+ ${BASH_SOURCE##*/}:${LINENO}: \[\033[0;37m\]'
 	fi
 fi
-
-known_rootfs_types="
-	alpine
-	debian
-"
-
-known_test_types="
-	http-wrk
-	ltp
-	sys-info
-	unixbench
-"
-
-MODULES_ID=${MODULES_ID:-"kernel_modules"}
-TARGET_HOSTNAME=${TARGET_HOSTNAME:-"tci-tester"}
