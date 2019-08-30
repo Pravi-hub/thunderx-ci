@@ -36,6 +36,7 @@ RUN echo 'deb-src http://deb.debian.org/debian buster main' >> /etc/apt/sources.
 		qemu-system-x86-64 \
 		qemu-user-static \
 		qemu-utils \
+		rsync \
 		sbsigntool \
 		sudo \
 		tcpdump \
