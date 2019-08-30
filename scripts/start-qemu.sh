@@ -214,59 +214,48 @@ qemu_append_args="${kernel_cmd}"
 case "${host_arch}--${target_arch}" in
 amd64--amd64)
 	have_efi=1
-	have_virtio=1
 	qemu_exe="qemu-system-x86_64"
 	qemu_args+=" -machine accel=kvm -cpu host -m 2048 -smp 2"
 	;;
+arm64--amd64)
+	have_efi=1
+	qemu_exe="qemu-system-x86_64"
+	qemu_args+=" -machine pc-q35-2.8 -cpu kvm64 -m 2048 -smp 2"
+	;;
 amd64--arm64)
 	have_efi=1
-	have_virtio=1
 	qemu_exe="qemu-system-aarch64"
 	qemu_args+=" -machine virt,gic-version=3 -cpu cortex-a57 -m 5120 -smp 2"
 	#qemu_args+=" -machine virt,gic-version=3 -cpu cortex-a57 -m 15360 -smp 2"
 	;;
+arm64--arm64)
+	have_efi=1
+	qemu_exe="qemu-system-aarch64"
+	qemu_args+=" -machine virt,gic-version=3,accel=kvm -cpu host -m 4096 -smp 2"
+	;;
 amd64--ppc*)
+	unset have_efi
 	qemu_exe="qemu-system-ppc64"
 	#qemu_args+=" -machine cap-htm=off -m 2048"
 	qemu_args+=" -machine pseries,cap-htm=off -m 2048"
 	;;
-arm64--amd64)
-	have_efi=1
-	have_virtio=1
-	qemu_exe="qemu-system-x86_64"
-	qemu_args+=" -machine pc-q35-2.8 -cpu kvm64 -m 2048 -smp 2"
-	;;
-arm64--arm64)
-	have_efi=1
-	have_virtio=1
-	qemu_exe="qemu-system-aarch64"
-	qemu_args+=" -machine virt,gic-version=3,accel=kvm -cpu host -m 4096 -smp 2"
-	;;
 *)
-	echo "${name}: ERROR: Unsupported host--target combo: '${"${host_arch}--${target_arch}"}'." >&2
+	echo "${name}: ERROR: Unsupported host--target combo: '${host_arch}--${target_arch}'." >&2
 	exit 1
 	;;
 esac
 
+nic_model=${nic_model:-"virtio-net-pci"}
 
 if [[ ${qemu_tap} ]]; then
-	# FIXME: Needs test.
-	# FIXME: Use virtio-net-device or virtio-net-pci???
 	qemu_args+=" \
 	-netdev tap,id=tap0,ifname=qemu0,br=br0 \
-	-device virtio-net-pci,netdev=tap0,mac=${ether_mac} \
+	-device ${nic_model},netdev=tap0,mac=${ether_mac} \
 	"
 else
 	ssh_fwd=$(( ${hostfwd_offset} + 22 ))
-
 	echo "${name}: SSH fwd = ${ssh_fwd}" >&2
-
-virtio_net_type="virtio-net-device"
-virtio_net_type="virtio-net-pci"
-
-if [[ ${virtio_net_type} ]]; then
-	qemu_args+=" -netdev user,id=eth0,hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME}"
-	qemu_args+=" -device ${virtio_net_type},netdev=eth0"
+	qemu_args+=" -nic user,model=${nic_model},hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME}"
 fi
 
 if [[ ${initrd} ]]; then
@@ -313,8 +302,8 @@ fi
 
 if [[ ${have_efi} ]]; then
 	setup_efi
-	qemu_args+="-drive if=pflash,file=${efi_code},format=raw,readonly"
-	qemu_args+="-drive if=pflash,file=${efi_vars},format=raw"
+	qemu_args+=" -drive if=pflash,file=${efi_code},format=raw,readonly"
+	qemu_args+=" -drive if=pflash,file=${efi_vars},format=raw"
 fi
 
 ls -l /dev/kvm || :
