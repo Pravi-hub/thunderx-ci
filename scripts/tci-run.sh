@@ -554,6 +554,7 @@ else
 	else
 		docker_cmd="/tci/scripts/tci-run.sh ${parent_ops}"
 	fi
+
 	${SCRIPTS_TOP}/run-builder.sh \
 		--verbose \
 		--container-name="${build_name}" \

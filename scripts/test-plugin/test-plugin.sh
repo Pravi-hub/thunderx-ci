@@ -2,6 +2,7 @@
 
 known_test_types="
 	http-wrk
+	ilp32
 	kselftest
 	lmbench
 	ltp

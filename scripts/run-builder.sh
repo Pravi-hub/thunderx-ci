@@ -125,23 +125,23 @@ if [[ ${tag} ]]; then
 fi
 
 if [[ ! ${TCI_CHECKOUT_SERVER} ]]; then
-	echo "${name}: ERROR: TCI_CHECKOUT_SERVER not defined.'" >&2
+	echo "${name}: ERROR: TCI_CHECKOUT_SERVER not defined." >&2
 	usage
 	exit 1
 fi
 if [[ ! ${TCI_RELAY_SERVER} ]]; then
-	echo "${name}: ERROR: TCI_RELAY_SERVER not defined.'" >&2
+	echo "${name}: ERROR: TCI_RELAY_SERVER not defined." >&2
 	usage
 	exit 1
 fi
 if [[ ! ${TCI_TFTP_SERVER} ]]; then
-	echo "${name}: ERROR: TCI_TFTP_SERVER not defined.'" >&2
+	echo "${name}: ERROR: TCI_TFTP_SERVER not defined." >&2
 	usage
 	exit 1
 fi
 
 if [[ ! ${SSH_AUTH_SOCK} ]]; then
-	echo "${name}: ERROR: SSH_AUTH_SOCK not defined.'" >&2
+	echo "${name}: ERROR: SSH_AUTH_SOCK not defined." >&2
 fi
 
 if [[ $(echo "${docker_args}" | egrep ' -w ') ]]; then
@@ -185,6 +185,8 @@ eval "docker run \
 	--hostname ${container_name} \
 	--add-host ${container_name}:127.0.0.1 \
 	-v ${SSH_AUTH_SOCK}:/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent \
+	--group-add $(stat --format=%g /var/run/docker.sock) \
+	-v /var/run/docker.sock:/var/run/docker.sock \
 	-e TCI_CHECKOUT_SERVER \
 	-e TCI_CHECKOUT_PORT \
 	-e TCI_RELAY_SERVER \
