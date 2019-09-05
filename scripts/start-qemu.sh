@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
-
-name="${0##*/}"
-
-SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
-
-source ${SCRIPTS_TOP}/lib/util.sh
-TARGET_HOSTNAME=${TARGET_HOSTNAME:-"tci-tester"}
-
 usage() {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
@@ -35,101 +26,143 @@ usage() {
 	eval "${old_xtrace}"
 }
 
-short_opts="a:c:e:f:hi:k:m:o:r:stv"
-long_opts="arch:,kernel-cmd:,ether-mac:,hostfwd-offset:,help,initrd:,\
+process_opts() {
+	local short_opts="a:c:e:f:hi:k:m:o:r:stv"
+	local long_opts="arch:,kernel-cmd:,ether-mac:,hostfwd-offset:,help,initrd:,\
 kernel:,modules:,out-file:,disk-image:,systemd-debug,qemu-tap,verbose,\
 hda:,hdb:,pid-file:,p9-share:"
 
-opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
+	local opts
+	opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
 
-if [ $? != 0 ]; then
-	echo "${name}: ERROR: Internal getopt" >&2
-	exit 1
-fi
-
-eval set -- "${opts}"
-
-while true ; do
-	case "${1}" in
-	-a | --arch)
-		target_arch=$(get_arch "${2}")
-		shift 2
-		;;
-	-c | --kernel-cmd)
-		kernel_cmd="${2}"
-		shift 2
-		;;
-	-e | --ether-mac)
-		ether_mac="${2}"
-		shift 2
-		;;
-	-f | --hostfwd-offset)
-		hostfwd_offset="${2}"
-		shift 2
-		;;
-	-h | --help)
-		usage=1
-		shift
-		;;
-	-i | --initrd)
-		initrd="${2}"
-		shift 2
-		;;
-	-k | --kernel)
-		kernel="${2}"
-		shift 2
-		;;
-	-m | --modules)
-		modules="${2}"
-		shift 2
-		;;
-	-o | --out-file)
-		out_file="${2}"
-		shift 2
-		;;
-	-r | --disk-image)
-		disk_image="${2}"
-		shift 2
-		;;
-	-s | --systemd-debug)
-		systemd_debug=1
-		shift
-		;;
-	-t | --qemu-tap)
-		qemu_tap=1
-		shift
-		;;
-	-v | --verbose)
-		set -x
-		verbose=1
-		shift
-		;;
-	--hda)
-		hda="${2}"
-		shift 2
-		;;
-	--hdb)
-		hdb="${2}"
-		shift 2
-		;;
-	--pid-file)
-		pid_file="${2}"
-		shift 2
-		;;
-	--p9-share)
-		p9_share="${2}"
-		shift 2
-		;;
-	--)
-		shift
-		break
-		;;
-	*)
-		echo "${name}: ERROR: Internal opts: '${@}'" >&2
+	if [ $? != 0 ]; then
+		echo "${name}: ERROR: Internal getopt" >&2
 		exit 1
+	fi
+
+	eval set -- "${opts}"
+
+	while true ; do
+		case "${1}" in
+		-a | --arch)
+			target_arch=$(get_arch "${2}")
+			shift 2
+			;;
+		-c | --kernel-cmd)
+			kernel_cmd="${2}"
+			shift 2
+			;;
+		-e | --ether-mac)
+			ether_mac="${2}"
+			shift 2
+			;;
+		-f | --hostfwd-offset)
+			hostfwd_offset="${2}"
+			shift 2
+			;;
+		-h | --help)
+			usage=1
+			shift
+			;;
+		-i | --initrd)
+			initrd="${2}"
+			shift 2
+			;;
+		-k | --kernel)
+			kernel="${2}"
+			shift 2
+			;;
+		-m | --modules)
+			modules="${2}"
+			shift 2
+			;;
+		-o | --out-file)
+			out_file="${2}"
+			shift 2
+			;;
+		-r | --disk-image)
+			disk_image="${2}"
+			shift 2
+			;;
+		-s | --systemd-debug)
+			systemd_debug=1
+			shift
+			;;
+		-t | --qemu-tap)
+			qemu_tap=1
+			shift
+			;;
+		-v | --verbose)
+			set -x
+			verbose=1
+			shift
+			;;
+		--hda)
+			hda="${2}"
+			shift 2
+			;;
+		--hdb)
+			hdb="${2}"
+			shift 2
+			;;
+		--pid-file)
+			pid_file="${2}"
+			shift 2
+			;;
+		--p9-share)
+			p9_share="${2}"
+			shift 2
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			echo "${name}: ERROR: Internal opts: '${@}'" >&2
+			exit 1
+			;;
+		esac
+	done
+}
+
+setup_efi() {
+	local efi_code_src
+	local efi_vars_src
+	local efi_full_src
+
+	case "${target_arch}" in
+	amd64)
+		efi_code_src="/usr/share/OVMF/OVMF_CODE.fd"
+		efi_vars_src="/usr/share/OVMF/OVMF_VARS.fd"
+		efi_full_src="/usr/share/ovmf/OVMF.fd"
+		;;
+	arm64)
+		efi_code_src="/usr/share/AAVMF/AAVMF_CODE.fd"
+		efi_vars_src="/usr/share/AAVMF/AAVMF_VARS.fd"
+		efi_full_src="/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
 		;;
 	esac
-done
+
+	efi_code="${efi_code_src}"
+	efi_vars="${target_arch}-EFI_VARS.fd"
+
+	check_file ${efi_code_src}
+	check_file ${efi_vars_src}
+
+	copy_file ${efi_vars_src} ${efi_vars}
+}
+
+#===============================================================================
+# program start
+#===============================================================================
+set -e
+
+name="${0##*/}"
+
+SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
+source ${SCRIPTS_TOP}/lib/util.sh
+
+TARGET_HOSTNAME=${TARGET_HOSTNAME:-"tci-tester"}
 
 MODULES_ID=${MODULES_ID:-"kernel_modules"}
 P9_SHARE_ID=${SHARE_ID:-"p9_share"}
@@ -185,34 +218,6 @@ if [[ ${modules} ]]; then
 	check_directory "${modules}"
 fi
 
-# --- end common ---
-
-setup_efi() {
-	local efi_code_src
-	local efi_vars_src
-	local efi_full_src
-
-	case "${target_arch}" in
-	amd64)
-		efi_code_src="/usr/share/OVMF/OVMF_CODE.fd"
-		efi_vars_src="/usr/share/OVMF/OVMF_VARS.fd"
-		efi_full_src="/usr/share/ovmf/OVMF.fd"
-		;;
-	arm64)
-		efi_code_src="/usr/share/AAVMF/AAVMF_CODE.fd"
-		efi_vars_src="/usr/share/AAVMF/AAVMF_VARS.fd"
-		efi_full_src="/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
-		;;
-	esac
-
-	efi_code="${efi_code_src}"
-	efi_vars="${target_arch}-EFI_VARS.fd"
-
-	check_file ${efi_code_src}
-	check_file ${efi_vars_src}
-
-	copy_file ${efi_vars_src} ${efi_vars}
-}
 
 qemu_args="-kernel ${kernel}"
 qemu_append_args="${kernel_cmd}"
