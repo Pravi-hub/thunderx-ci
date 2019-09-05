@@ -453,8 +453,8 @@ SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "${BASH_SOURCE%/*}" && pwd)"}
 DOCKER_TOP=${DOCKER_TOP:-"$(cd "${SCRIPTS_TOP}/../docker" && pwd)"}
 
 source ${SCRIPTS_TOP}/lib/util.sh
-source ${SCRIPTS_TOP}/rootfs-plugin/plugin.sh
-source ${SCRIPTS_TOP}/test-plugin/plugin.sh
+source ${SCRIPTS_TOP}/rootfs-plugin/rootfs-plugin.sh
+source ${SCRIPTS_TOP}/test-plugin/test-plugin.sh
 
 config_file="${config_file:-${SCRIPTS_TOP}/tci-run.conf}"
 
