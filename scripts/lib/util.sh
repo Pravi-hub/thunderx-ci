@@ -286,7 +286,7 @@ git_checkout_safe() {
 	git_set_remote ${dir} ${repo}
 	git -C ${dir} remote update
 	git -C ${dir} checkout --force ${branch}
-	#git -C ${dir} pull
+	git -C ${dir} reset --hard origin/${branch}
 }
 
 git_checkout_force() {
