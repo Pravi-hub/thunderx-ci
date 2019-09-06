@@ -445,9 +445,10 @@ run_remote_tests() {
 #===============================================================================
 # program start
 #===============================================================================
-set -e
-
 name="${0##*/}"
+
+trap "on_exit 'failed.'" EXIT
+set -e
 
 SCRIPTS_TOP=${SCRIPTS_TOP:-"$(cd "${BASH_SOURCE%/*}" && pwd)"}
 DOCKER_TOP=${DOCKER_TOP:-"$(cd "${SCRIPTS_TOP}/../docker" && pwd)"}
@@ -472,7 +473,6 @@ parent_ops="$@"
 start_time="$(date)"
 SECONDS=0
 
-trap "on_exit 'failed.'" EXIT
 
 process_opts "${@}"
 
@@ -568,9 +568,8 @@ else
 		" \
 		-- "${docker_cmd}"
 
-	trap - EXIT
-	on_exit 'container success.'
-	exit
+	trap "on_exit 'container success.'" EXIT
+	exit 0
 fi
 
 check_rootfs_types
@@ -653,5 +652,5 @@ for rootfs_type in ${rootfs_types}; do
 	done
 done
 
-trap - EXIT
-on_exit 'Success.'
+trap "on_exit 'Success.'" EXIT
+exit 0

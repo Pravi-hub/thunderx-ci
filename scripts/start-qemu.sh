@@ -152,15 +152,25 @@ setup_efi() {
 	copy_file ${efi_vars_src} ${efi_vars}
 }
 
+on_exit() {
+	local result=${1}
+
+	echo "${name}: Done:       ${result}" >&2
+	exit ${result}
+}
+
 #===============================================================================
 # program start
 #===============================================================================
-set -e
-
 name="${0##*/}"
+
+trap "on_exit 'failed.'" EXIT
+set -e
 
 SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
 source ${SCRIPTS_TOP}/lib/util.sh
+
+process_opts "${@}"
 
 TARGET_HOSTNAME=${TARGET_HOSTNAME:-"tci-tester"}
 
@@ -179,6 +189,7 @@ fi
 
 if [[ -n "${usage}" ]]; then
 	usage
+	trap - EXIT
 	exit 0
 fi
 
