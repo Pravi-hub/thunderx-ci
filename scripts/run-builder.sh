@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
-
-name="${0##*/}"
-
-SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
-
-source ${SCRIPTS_TOP}/lib/util.sh
-
-DOCKER_TOP=${DOCKER_TOP:-"$( cd "${SCRIPTS_TOP}/../docker" && pwd )"}
-DOCKER_TAG=${DOCKER_TAG:-"$("${DOCKER_TOP}/builder/build-builder.sh" --tag)"}
-
 usage () {
 	local old_xtrace="$(shopt -po xtrace || :)"
 	set +o xtrace
@@ -39,56 +28,59 @@ usage () {
 	eval "${old_xtrace}"
 }
 
-short_opts="a:hn:stv"
-long_opts="docker-args:,help,container-name:,no-sudoers,tag,verbose"
+process_opts() {
+	local short_opts="a:hn:stv"
+	local long_opts="docker-args:,help,container-name:,no-sudoers,tag,verbose"
 
-opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
+	local opts
+	opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
 
-if [ $? != 0 ]; then
-	echo "${name}: ERROR: Internal getopt" >&2
-	exit 1
-fi
-
-eval set -- "${opts}"
-
-while true ; do
-	case "${1}" in
-	-a | --docker-args)
-		docker_args="${2}"
-		shift 2
-		;;
-	-h | --help)
-		usage=1
-		shift
-		;;
-	-n | --container-name)
-		container_name="${2}"
-		shift 2
-		;;
-	-s | --no-sudoers)
-		no_sudoers=1
-		shift
-		;;
-	-t | --tag)
-		tag=1
-		shift
-		;;
-	-v | --verbose)
-		set -x
-		verbose=1
-		shift
-		;;
-	--)
-		shift
-		user_cmd="${@}"
-		break
-		;;
-	*)
-		echo "${name}: ERROR: Internal opts: '${@}'" >&2
+	if [ $? != 0 ]; then
+		echo "${name}: ERROR: Internal getopt" >&2
 		exit 1
-		;;
-	esac
-done
+	fi
+
+	eval set -- "${opts}"
+
+	while true ; do
+		case "${1}" in
+		-a | --docker-args)
+			docker_args="${2}"
+			shift 2
+			;;
+		-h | --help)
+			usage=1
+			shift
+			;;
+		-n | --container-name)
+			container_name="${2}"
+			shift 2
+			;;
+		-s | --no-sudoers)
+			no_sudoers=1
+			shift
+			;;
+		-t | --tag)
+			tag=1
+			shift
+			;;
+		-v | --verbose)
+			set -x
+			verbose=1
+			shift
+			;;
+		--)
+			shift
+			user_cmd="${@}"
+			break
+			;;
+		*)
+			echo "${name}: ERROR: Internal opts: '${@}'" >&2
+			exit 1
+			;;
+		esac
+	done
+}
 
 on_exit() {
 	local result=${1}
@@ -96,14 +88,29 @@ on_exit() {
 	echo "${name}: ${result}" >&2
 }
 
+#===============================================================================
+# program start
+#===============================================================================
+
+name="${0##*/}"
 
 if [ ${TCI_BUILDER} ]; then
 	echo "${name}: ERROR: Already in tci-builder." >&2
 	exit 1
 fi
 
-docker_extra_args=""
+SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
+source ${SCRIPTS_TOP}/lib/util.sh
 
+trap "on_exit 'Done, failed.'" EXIT
+set -e
+
+DOCKER_TOP=${DOCKER_TOP:-"$( cd "${SCRIPTS_TOP}/../docker" && pwd )"}
+DOCKER_TAG=${DOCKER_TAG:-"$("${DOCKER_TOP}/builder/build-builder.sh" --tag)"}
+
+process_opts "${@}"
+
+docker_extra_args=""
 container_name=${container_name:-"tci"}
 user_cmd=${user_cmd:-"/bin/bash"}
 
@@ -116,8 +123,6 @@ if [[ ${tag} ]]; then
 	echo "${DOCKER_TAG}"
 	exit 0
 fi
-
-trap "on_exit 'Done, failed.'" EXIT
 
 if [[ ! ${TCI_CHECKOUT_SERVER} ]]; then
 	echo "${name}: ERROR: TCI_CHECKOUT_SERVER not defined.'" >&2
