@@ -30,7 +30,7 @@ process_opts() {
 	local short_opts="a:c:e:f:hi:k:m:o:r:stv"
 	local long_opts="arch:,kernel-cmd:,ether-mac:,hostfwd-offset:,help,initrd:,\
 kernel:,modules:,out-file:,disk-image:,systemd-debug,qemu-tap,verbose,\
-hda:,hdb:,pid-file:,p9-share:"
+distro_test:,hda:,hdb:,pid-file:,p9-share:"
 
 	local opts
 	opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
@@ -95,6 +95,10 @@ hda:,hdb:,pid-file:,p9-share:"
 		-v | --verbose)
 			set -x
 			verbose=1
+			shift
+			;;
+		--distro_test)
+			distro_test=1
 			shift
 			;;
 		--hda)
@@ -202,15 +206,17 @@ arm64|ppc*)
 	;;
 esac
 
-if [[ ! ${kernel} ]]; then
+if [[ ! ${kernel} && ! ${distro_test} ]]; then
 	echo "${name}: ERROR: Must provide --kernel option." >&2
 	usage
 	exit 1
 fi
 
-check_file "${kernel}"
+if [[ ${kernel} ]]; then
+	check_file "${kernel}"
+fi
 
-if [[ ! ${initrd} && ! ${disk_image} ]]; then
+if [[ ! ${initrd} && ! ${disk_image} && ! ${distro_test} ]]; then
 	echo "${name}: ERROR: Must provide --initrd or --disk-image option." >&2
 	usage
 	exit 1
@@ -229,8 +235,10 @@ if [[ ${modules} ]]; then
 	check_directory "${modules}"
 fi
 
+if [[ ${kernel} ]]; then
+	qemu_args="-kernel ${kernel}"
+fi
 
-qemu_args="-kernel ${kernel}"
 qemu_append_args="${kernel_cmd}"
 
 case "${host_arch}--${target_arch}" in
