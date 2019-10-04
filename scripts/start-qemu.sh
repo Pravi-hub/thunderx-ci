@@ -153,7 +153,10 @@ setup_efi() {
 	check_file ${efi_code_src}
 	check_file ${efi_vars_src}
 
-	copy_file ${efi_vars_src} ${efi_vars}
+	if [[ ! ${distro_test} ]]; then
+		copy_file ${efi_vars_src} ${efi_vars}
+	fi
+
 }
 
 on_exit() {
