@@ -215,10 +215,10 @@ SCRIPTS_TOP=${SCRIPTS_TOP:-"$( cd "${BASH_SOURCE%/*}" && pwd )"}
 trap "on_exit 'failed.'" EXIT
 set -e
 
-host_arch=$(get_arch "$(uname -m)")
-
 source ${SCRIPTS_TOP}/lib/util.sh
 source ${SCRIPTS_TOP}/lib/relay.sh
+
+host_arch=$(get_arch "$(uname -m)")
 
 process_opts "${@}"
 
