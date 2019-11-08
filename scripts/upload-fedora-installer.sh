@@ -89,7 +89,7 @@ download_fedora_files() {
 	else
 		cmd="ssh ${tftp_server} ${ssh_no_check} "
 		dir="/var/tftproot/${host}"
-		sudo scp ${ssh_no_check} ${JENKINS_TOP}/jobs/distro/fedora/${type}-qemu.ks ${tftp_server}:${dir}/f_kickstart
+		scp ${ssh_no_check} ${JENKINS_TOP}/jobs/distro/fedora/${type}-qemu.ks ${tftp_server}:${dir}/f_kickstart
 	fi
 
 	set +e
