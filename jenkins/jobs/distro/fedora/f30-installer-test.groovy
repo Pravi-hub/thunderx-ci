@@ -129,47 +129,53 @@ docker images \${tag%:*}
                }
            }
 
+        stage('upload files') {
+            steps {
+                script {
+                    sshagent (credentials: ['tci-tftp-login-key']) {
+		        sh ("""#!/bin/bash
+set +ex
+
+scripts/upload-fedora-installer.sh \
+	--host=${params.TEST_MACHINE} \
+	--tftp-server=${env.tftp_remote} \
+	--verbose
+result=\${?}
+set -e
+if [ \${result} -eq 0 ]; then
+	echo  "yes" > NeedRemoteTest
+else
+	echo  "no" > NeedRemoteTest
+fi
+
+set +e
+
+scripts/upload-fedora-installer.sh \
+	--host=qemu \
+	--tftp-server=${env.tftp_qemu} \
+	--verbose
+result=\${?}
+set -e
+if [ \${result} -eq 0 ]; then
+	echo  "yes" > NeedQemuTest
+else
+	echo  "no" > NeedQemuTest
+fi
+""")
+                    }
+                 }
+              }
+           }
+
+
         stage('parallel-test') {
             failFast false
-
-            environment {
-                NeedRemotetest = sh(
-                    returnStdout: true,
-                    script:"set +ex; \
-scripts/upload-fedora-installer.sh \
-    --host=${params.TEST_MACHINE} \
-    --tftp-server=${env.tftp_remotei} \
-    --verbose ; \
-result=\${?} ; \
-set -e ; \
-if [ \${result} -eq 0 ]; then \
-	echo -n 'yes'; \
-else \
-	echo -n 'no' ; \
-fi").trim()
-
-                 NeedQemutest = sh(
-                    returnStdout: true,
-                    script:"set +ex; \
-scripts/upload-fedora-installer.sh \
-    --host=qemu \
-    --tftp-server=${env.tftp_qemu} \
-    --verbose ; \
-result=\${?} ; \
-set -e ; \
-if [ \${result} -eq 0 ]; then \
-        echo -n 'yes'; \
-else \
-	echo -n 'no' ; \
-fi").trim()
-
-}
             parallel { /* parallel-test */
 
                  stage('run-remote-tests') {
                      when {
                         expression { return RUN_REMOTE_TESTS == true \
-                            &&  env.NeedRemotetest == 'yes'
+                            &&  readFile('NeedRemoteTest').contains('yes')
                             }
                        }
 
@@ -225,7 +231,7 @@ echo "${STAGE_NAME}: TODO"
                 stage('run-qemu-tests') {
                     when {
                         expression { return params.RUN_QEMU_TESTS == true \
-                            &&  env.NeedQemutest == 'yes'
+                            &&  readFile('NeedQemuTest').contains('yes')
                        }
                     }
 
