@@ -130,6 +130,19 @@ docker images \${tag%:*}
            }
 
         stage('upload files') {
+            agent { /* run-remote-tests */
+                docker {
+                    image "${env.dockerTag}"
+                    args "--network host \
+                        --privileged \
+                        ${env.dockerCredsExtra} \
+                        ${env.dockerSshExtra} \
+                           "
+                    reuseNode true
+                        }
+                    }
+            
+
             steps {
                 script {
                     sshagent (credentials: ['tci-tftp-login-key']) {
@@ -183,8 +196,9 @@ fi
                       docker {
                               image "${env.dockerTag}"
                               args "--network host \
-                              ${env.dockerCredsExtra} \
-                              ${env.dockerSshExtra} \
+                                  --privileged \
+                                  ${env.dockerCredsExtra} \
+                                  ${env.dockerSshExtra} \
                                     "
                                     reuseNode true
                                 }
@@ -239,6 +253,7 @@ echo "${STAGE_NAME}: TODO"
                         docker {
                             image "${env.dockerTag}"
                             args "--network host \
+                                --privileged \
                                 ${env.dockerCredsExtra} \
                                 ${env.dockerSshExtra} \
                             "

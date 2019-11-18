@@ -287,7 +287,7 @@ SECONDS=0
 start_qemu_distro_installation
 
 echo "${name}: Waiting for QEMU startup..." >&2
-sleep 10s
+sleep 4500s
 
 echo '---- start-qemu start for distro installation ----' >&2
 cat ${out_file}.start_installation >&2
@@ -308,7 +308,7 @@ if ! kill -0 ${qemu_pid} &> /dev/null; then
 fi
 
 echo "${name}: Waiting for QEMU exit..." >&2
-wait_pid ${qemu_pid} 5100
+wait_pid ${qemu_pid} 780
 
 
 start_qemu_distro_booting
