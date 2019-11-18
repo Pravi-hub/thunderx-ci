@@ -288,7 +288,11 @@ if [[ ${qemu_tap} ]]; then
 else
 	ssh_fwd=$(( ${hostfwd_offset} + 22 ))
 	echo "${name}: SSH fwd = ${ssh_fwd}" >&2
-	qemu_args+=" -nic user,model=${nic_model},hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME}"
+	qemu_args+=" \
+		-netdev user,id=eth0,hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME} \
+		-device virtio-net-device,netdev=eth0 \
+		"
+
 fi
 
 if [[ ${initrd} ]]; then
