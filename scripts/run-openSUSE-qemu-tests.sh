@@ -28,7 +28,7 @@ usage() {
 process_opts() {
 	local short_opts="a:c:f:ho:sv"
 	local long_opts="arch:,kernel-cmd:,hostfwd-offset:,help,out-file:,systemd-debug,\
-verbose,control-file:,hda:,iso-image:,result-file:,ssh-key:"
+verbose,control-file:,hda:,initrd:,kernel:,result-file:,ssh-key:"
 
 	local opts
 	opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
@@ -79,8 +79,12 @@ verbose,control-file:,hda:,iso-image:,result-file:,ssh-key:"
 			hda="${2}"
 			shift 2
 			;;
-		--iso-image)
-			iso_image="${2}"
+		--initrd)
+			initrd="${2}"
+			shift 2
+			;;
+		--kernel)
+			kernel="${2}"
 			shift 2
 			;;
 		--result-file)
@@ -126,12 +130,6 @@ on_exit() {
 		autoinst_mnt=''
 	fi
 
-	if [[ -d ${iso_mnt} ]]; then
-		sudo umount ${iso_mnt} || :
-		rm -rf ${iso_mnt} || :
-		iso_mnt=''
-	fi
-	
 	if [[ -f "${autoinst_img}" ]]; then
 		rm -f ${autoinst_img}
 		autoinst_img=''
@@ -238,16 +236,10 @@ if [[ "${target_arch}" != "arm64" ]]; then
 	exit 1
 fi 
 
-check_opt 'iso-image' ${iso_image}
-check_file "${iso_image}"
-
-iso_mnt="$(mktemp --tmpdir --directory openSUSE-iso-mnt.XXXX)"
-sudo mount -o rw,uid=$(id -u),gid=$(id -g)  ${iso_image} ${iso_mnt}
-
-kernel=${iso_mnt}/boot/aarch64/linux
+check_opt 'kernel' ${kernel}
 check_file "${kernel}"
 
-initrd=${iso_mnt}/boot/aarch64/initrd
+check_opt 'initrd' ${initrd}
 check_file "${initrd}"
 
 check_opt 'hda' ${hda}
@@ -297,7 +289,7 @@ start_qemu_distro_installation
 
 
 echo "${name}: Waiting for QEMU startup..." >&2
-sleep 10s
+sleep 6800s
 
 echo '---- start-qemu start for distro installation ----' >&2
 cat ${out_file}.start_installation >&2
@@ -318,7 +310,7 @@ if ! kill -0 ${qemu_pid} &> /dev/null; then
 fi
 
 echo "${name}: Waiting for QEMU exit..." >&2
-wait_pid ${qemu_pid} 9000
+wait_pid ${qemu_pid} 1400
 
 start_qemu_distro_booting
 
