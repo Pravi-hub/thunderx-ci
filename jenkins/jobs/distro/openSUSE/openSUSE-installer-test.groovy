@@ -277,12 +277,13 @@ ssh-keygen -q -f test-login-key -N ''
 
 ls
 
-scripts/run-openSUSE-qemu-tests.sh  \
+scripts/run-distro-qemu-tests.sh  \
     --arch=${params.TARGET_ARCH} \
     --initrd=${env.tftp_initrd} \
     --kernel=${env.tftp_kernel} \
-    --control-file=${env.tftp_autoinst} \
+    --preconfig-file=${env.tftp_autoinst} \
     --out-file=${env.qemu_out} \
+    --distro=opensuse \
     --hda=opensuse.hda \
     --ssh-key=test-login-key \
     --verbose

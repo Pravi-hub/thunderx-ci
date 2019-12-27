@@ -50,7 +50,7 @@ pipeline {
 
     options {
         // Timeout if no node available.
-        timeout(time: 90, unit: 'MINUTES')
+        timeout(time: 120, unit: 'MINUTES')
         //timestamps()
         buildDiscarder(logRotator(daysToKeepStr: '10', numToKeepStr: '5'))
     }
@@ -209,7 +209,7 @@ fi
                            }
 
                        options { /* run-remote-tests */
-                             timeout(time: 90, unit: 'MINUTES')
+                             timeout(time: 120, unit: 'MINUTES')
                            }
 
                        steps { /* run-remote-tests */
@@ -262,7 +262,7 @@ echo "${STAGE_NAME}: TODO"
                     }
 
                     options { /* run-qemu-tests */
-                        timeout(time: 90, unit: 'MINUTES')
+                        timeout(time: 120, unit: 'MINUTES')
                     }
 
                     steps { /* run-qemu-tests */
@@ -282,12 +282,13 @@ qemu-img create -f qcow2 fedora.hda 20G
 rm -f test-login-key
 ssh-keygen -q -f test-login-key -N ''
 
-scripts/run-fedora-qemu-tests.sh  \
+scripts/run-distro-qemu-tests.sh  \
     --arch=${params.TARGET_ARCH} \
     --initrd=${env.tftp_initrd} \
     --kernel=${env.tftp_kernel} \
-    --kickstart=${env.tftp_kickstart} \
+    --preconfig-file=${env.tftp_kickstart} \
     --out-file=${env.qemu_out} \
+    --distro=fedora \
     --hda=fedora.hda \
     --ssh-key=test-login-key \
     --verbose

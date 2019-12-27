@@ -21,6 +21,7 @@ usage() {
 	echo "  -v --verbose           - Verbose execution." >&2
 	echo "  --hda                  - QEMU IDE hard disk image hda. Default: '${hda}'." >&2
 	echo "  --hdb                  - QEMU IDE hard disk image hdb. Default: '${hdb}'." >&2
+	echo "  --hdc                  - QEMU IDE hard disk image hdc. Default: '${hdc}'." >&2
 	echo "  --pid-file             - QEMU IDE hard disk image hdb. Default: '${pid_file}'." >&2
 	echo "  --p9-share             - Plan9 share directory. Default: '${p9_share}'." >&2
 	eval "${old_xtrace}"
@@ -29,8 +30,8 @@ usage() {
 process_opts() {
 	local short_opts="a:c:e:f:hi:k:m:o:r:stv"
 	local long_opts="arch:,kernel-cmd:,ether-mac:,hostfwd-offset:,help,initrd:,\
-kernel:,modules:,out-file:,disk-image:,systemd-debug,qemu-tap,verbose,\
-distro_test:,hda:,hdb:,pid-file:,p9-share:"
+kernel:,modules:,out-file:,disk-image:,systemd-debug,qemu-tap,verbose,distro_test:,\
+hda:,hdb:,hdc:,pid-file:,p9-share:,ssh_fwd:"
 
 	local opts
 	opts=$(getopt --options ${short_opts} --long ${long_opts} -n "${name}" -- "$@")
@@ -109,12 +110,20 @@ distro_test:,hda:,hdb:,pid-file:,p9-share:"
 			hdb="${2}"
 			shift 2
 			;;
+		--hdc)
+			hdc="${2}"
+			shift 2
+			;;
 		--pid-file)
 			pid_file="${2}"
 			shift 2
 			;;
 		--p9-share)
 			p9_share="${2}"
+			shift 2
+			;;
+		--ssh_fwd)
+			ssh_fwd="${2}"
 			shift 2
 			;;
 		--)
@@ -286,13 +295,12 @@ if [[ ${qemu_tap} ]]; then
 	-device ${nic_model},netdev=tap0,mac=${ether_mac} \
 	"
 else
-	ssh_fwd=$(( ${hostfwd_offset} + 22 ))
+	ssh_fwd=${ssh_fwd:-"$((${hostfwd_offset} + 22))"}
 	echo "${name}: SSH fwd = ${ssh_fwd}" >&2
 	qemu_args+=" \
-		-netdev user,id=eth0,hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME} \
-		-device virtio-net-device,netdev=eth0 \
-		"
-
+                -netdev user,id=eth0,hostfwd=tcp::${ssh_fwd}-:22,hostname=${TARGET_HOSTNAME} \
+                -device virtio-net-device,netdev=eth0 \
+        "
 fi
 
 if [[ ${initrd} ]]; then
@@ -305,6 +313,10 @@ fi
 
 if [[ ${hdb} ]]; then
 	qemu_args+=" -hdb ${hdb}"
+fi
+
+if [[ ${hdc} ]]; then
+	qemu_args+=" -hdc ${hdc}"
 fi
 
 if [[ ${p9_share} ]]; then
